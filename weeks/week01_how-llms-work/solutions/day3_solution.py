@@ -85,12 +85,20 @@ def part1_toy() -> None:
         p = softmax(logits, t)
         print(f"{t:>5} | " + " ".join(f"{x:>8.3%}" for x in p) + f" | {entropy_bits(p):.2f}")
     p = softmax(logits, 1.0)
-    print("\nAt T=1.0, top_p=0.9 keeps:", [w for w, x in zip(words, top_p_filter(p, 0.9), strict=True) if x > 0])
-    print("At T=1.0, top_k=2   keeps:", [w for w, x in zip(words, top_k_filter(p, 2), strict=True) if x > 0])
+    print(
+        "\nAt T=1.0, top_p=0.9 keeps:",
+        [w for w, x in zip(words, top_p_filter(p, 0.9), strict=True) if x > 0],
+    )
+    print(
+        "At T=1.0, top_k=2   keeps:",
+        [w for w, x in zip(words, top_k_filter(p, 2), strict=True) if x > 0],
+    )
     # Sanity check: sampling frequencies match the probabilities
     rng = np.random.default_rng(0)
     draws = Counter(sample(logits, 1.0, rng=rng) for _ in range(20000))
-    print("Empirical freq at T=1 :", {words[i]: round(c / 20000, 3) for i, c in sorted(draws.items())})
+    print(
+        "Empirical freq at T=1 :", {words[i]: round(c / 20000, 3) for i, c in sorted(draws.items())}
+    )
     print("Theoretical           :", {w: round(float(x), 3) for w, x in zip(words, p, strict=True)})
 
 
@@ -125,7 +133,10 @@ def part2_real(model, tok) -> None:
 def diversity_experiment(model, tok, n_samples: int = 20, max_new: int = 10):
     """For each temperature, sample n completions and measure how different they are."""
     prompt_msgs = [
-        {"role": "user", "content": "Invent a name for a new coffee shop. Reply with the name only."}
+        {
+            "role": "user",
+            "content": "Invent a name for a new coffee shop. Reply with the name only.",
+        }
     ]
     ids = tok.apply_chat_template(
         prompt_msgs, add_generation_prompt=True, return_tensors="pt", return_dict=True
@@ -176,8 +187,10 @@ def part3_challenge(model, tok) -> None:
     results = diversity_experiment(model, tok)
     print(f"{'T':>4} {'distinct':>9} {'ratio':>6} {'entropy':>8}  examples")
     for r in results:
-        print(f"{r['temperature']:>4} {r['distinct']:>9} {r['distinct_ratio']:>6.2f} "
-              f"{r['entropy_bits']:>8.2f}  {r['examples']}")
+        print(
+            f"{r['temperature']:>4} {r['distinct']:>9} {r['distinct_ratio']:>6.2f} "
+            f"{r['entropy_bits']:>8.2f}  {r['examples']}"
+        )
     print(f"\nPlot saved to {plot(results)}")
     assert results[0]["distinct"] == 1, "T=0 (greedy) must always return the same output"
     assert results[-1]["distinct"] > results[1]["distinct"], "diversity should grow with T"

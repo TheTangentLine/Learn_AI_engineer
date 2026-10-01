@@ -48,3 +48,17 @@ Without `uv`: `python3 -m venv .venv && .venv/bin/pip install -e ".[local]"`.
 ```bash
 uv run python weeks/week01_how-llms-work/solutions/day2_solution.py
 ```
+
+## What has been verified
+| Item | How |
+|---|---|
+| Day 1 solution | Run against all three provider wire formats using a local fake server |
+| Day 2, 3 solutions | Executed with a real local model (Qwen2.5-0.5B); outputs in the lessons are real |
+| Day 4 Parts A–B | Executed; formula matched a real model's cache **byte for byte** |
+| Day 4 Part C | **Needs an Anthropic key; not executed by the author.** Trust your own `usage` numbers |
+| Day 5 solution | Executed offline with assertions; real-provider path exercised against the fake server |
+| Day 6 harness | `--mock` self-test passes; graders unit-tested (this caught one wrong answer key). Real-model results **not run by the author** |
+| Day 7 `llm-cli` | 20 offline tests (mutation-checked) + a full CLI session run against the fake server |
+| `common/llm.py` | 19 offline tests in `tests/` (complete, stream, async, structured; usage/cost normalisation) |
+
+Real calls against the live Anthropic/OpenAI APIs were not possible during authoring (no keys), so if a live API behaves differently from the fake server, the lesson text is wrong and **you should trust the live API**. Please fix the lesson.

@@ -63,6 +63,18 @@ Rules of thumb you can rely on:
 
 At each step the model outputs a score (**logit**) for *every* token in its vocabulary. A softmax turns those into probabilities. The **log-probability** is just `log(p)`, which is numerically stabler: `p = exp(logprob)`.
 
+```mermaid
+flowchart LR
+    T["Text"] --> TK["Tokenizer (BPE)"]
+    TK --> IDS["Token IDs"]
+    IDS --> M["Transformer"]
+    M --> LG["Logits: one score per vocab token"]
+    LG --> SM["Softmax"]
+    SM --> P["Probabilities"]
+    P --> S["Pick next token"]
+    S -->|append and repeat| IDS
+```
+
 If the model is certain, one token gets ≈100% of the mass. If it is guessing, the mass is **split across several candidates**. That split is observable, which makes logprobs a cheap *hallucination signal*:
 
 ```python

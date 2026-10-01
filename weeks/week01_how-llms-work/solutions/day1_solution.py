@@ -97,8 +97,9 @@ def complete(
     elif provider == "ollama":
         from openai import OpenAI
 
-        client = OpenAI(base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
-                        api_key="ollama")
+        client = OpenAI(
+            base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"), api_key="ollama"
+        )
         if system:
             messages = [{"role": "system", "content": system}, *messages]
         r = client.chat.completions.create(model=model, messages=messages, max_tokens=max_tokens)
@@ -111,8 +112,7 @@ def complete(
 
     cost = _cost(model, in_tok, out_tok)
     TOTAL_COST_USD += cost
-    return LLMResponse(text, provider, model, in_tok, out_tok, cost,
-                       time.perf_counter() - t0, stop)
+    return LLMResponse(text, provider, model, in_tok, out_tok, cost, time.perf_counter() - t0, stop)
 
 
 def configured_providers() -> list[str]:
@@ -133,8 +133,10 @@ if __name__ == "__main__":
 
     prompt = "Why is the sky blue?"
     system = "You are a concise assistant. Answer in one sentence."
-    print(f"{'provider':10} {'model':18} {'in':>4} {'out':>4} {'cost($)':>9} {'latency':>8}  "
-          f"{'stop':10}  answer")
+    print(
+        f"{'provider':10} {'model':18} {'in':>4} {'out':>4} {'cost($)':>9} {'latency':>8}  "
+        f"{'stop':10}  answer"
+    )
     for p in providers:
         try:
             r = complete(prompt, system=system, provider=p)
@@ -142,8 +144,10 @@ if __name__ == "__main__":
             print(f"{p:10} ERROR: {type(e).__name__}: {e}")
             continue
         answer = r.text.replace("\n", " ")[:60]
-        print(f"{r.provider:10} {r.model:18} {r.input_tokens:>4} {r.output_tokens:>4} "
-              f"{r.cost_usd:>9.6f} {r.latency_s:>7.2f}s  {r.stop_reason!s:10}  {answer}")
+        print(
+            f"{r.provider:10} {r.model:18} {r.input_tokens:>4} {r.output_tokens:>4} "
+            f"{r.cost_usd:>9.6f} {r.latency_s:>7.2f}s  {r.stop_reason!s:10}  {answer}"
+        )
 
     # Acceptance check: truncation must be visible in stop_reason.
     short = complete("Write a 200-word essay about rivers.", provider=providers[0], max_tokens=5)

@@ -20,6 +20,16 @@ logits  →  (adjust)  →  softmax  →  probabilities  →  pick one token  �
 
 "Decoding strategy" means *how you pick*, and it is where randomness enters. The model itself is deterministic: same input, same logits.
 
+```mermaid
+flowchart LR
+    LG["Logits"] --> TP["Divide by temperature"]
+    TP --> TK["Top-k filter"]
+    TK --> NP["Top-p filter"]
+    NP --> RN["Renormalise"]
+    RN --> DR["Draw one token"]
+    DR -->|append| LG
+```
+
 | Strategy | Rule | Character |
 |---|---|---|
 | **Greedy** (T=0) | Always take the most likely token | Repeatable, safe, can loop or be bland |

@@ -1,0 +1,17 @@
+# Postgres + pgvector for Week 3 Day 2 (and reused in later weeks).
+#   docker compose -f weeks/week03_embeddings-and-rag/docker-compose.yml up -d
+services:
+  pgvector:
+    image: pgvector/pgvector:pg17
+    container_name: roadmap-pgvector
+    environment:
+      POSTGRES_USER: roadmap
+      POSTGRES_PASSWORD: roadmap
+      POSTGRES_DB: roadmap
+    ports:
+      - "55432:5432"       # non-default host port so it never clashes with a local Postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U roadmap"]
+      interval: 2s
+      timeout: 3s
+      retries: 20

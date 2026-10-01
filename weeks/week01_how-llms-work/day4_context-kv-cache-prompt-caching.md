@@ -27,6 +27,19 @@ Prefill  : process all prompt tokens in parallel   → fills the KV cache   (com
 Decode   : one new token at a time, reuse the cache → appends 1 entry     (memory-bandwidth-bound)
 ```
 
+```mermaid
+flowchart TB
+    subgraph prefill["Prefill (compute-bound)"]
+        P1["All prompt tokens in parallel"] --> KV1["Fill the KV cache"]
+    end
+    subgraph decode["Decode (memory-bandwidth-bound)"]
+        D1["New token"] --> D2["Attend to cached K and V"]
+        D2 --> D3["Append this token's K and V"]
+        D3 --> D1
+    end
+    KV1 --> D1
+```
+
 **Memory formula**
 
 ```

@@ -61,8 +61,9 @@ def part_a(model, tok) -> None:
     # 1) Verify the formula against the real cache of a real model.
     cfg = AutoConfig.from_pretrained(LOCAL_MODEL)
     head_dim = cfg.hidden_size // cfg.num_attention_heads
-    shape = ModelShape("Qwen2.5-0.5B (from config)", cfg.num_hidden_layers,
-                       cfg.num_key_value_heads, head_dim, 0.5)
+    shape = ModelShape(
+        "Qwen2.5-0.5B (from config)", cfg.num_hidden_layers, cfg.num_key_value_heads, head_dim, 0.5
+    )
     ids = tok("hello " * 200, return_tensors="pt")["input_ids"]
     with torch.no_grad():
         cache = model(input_ids=ids, use_cache=True).past_key_values
@@ -73,20 +74,28 @@ def part_a(model, tok) -> None:
     )
     predicted = kv_cache_bytes(shape, ids.shape[1], bytes_per_elem=4)  # model loaded in fp32
     print(f"Measured cache for {ids.shape[1]} tokens (fp32): {measured:,} bytes")
-    print(f"Formula prediction                       : {predicted:,} bytes  "
-          f"{'MATCH' if measured == predicted else 'MISMATCH'}")
+    print(
+        f"Formula prediction                       : {predicted:,} bytes  "
+        f"{'MATCH' if measured == predicted else 'MISMATCH'}"
+    )
     assert measured == predicted
 
     # 2) What does it cost at scale? (fp16 cache, 1 sequence vs. a busy server)
-    print(f"\n{'model':16} {'weights fp16':>13} | KV cache fp16: {'32k ctx x1':>11} {'128k ctx x1':>12} "
-          f"{'32k ctx x32 users':>19}")
+    print(
+        f"\n{'model':16} {'weights fp16':>13} | KV cache fp16: {'32k ctx x1':>11} {'128k ctx x1':>12} "
+        f"{'32k ctx x32 users':>19}"
+    )
     for s in SHAPES:
         weights = s.params_b * 1e9 * 2
         row = [kv_cache_bytes(s, n, b) for n, b in ((32_768, 1), (131_072, 1), (32_768, 32))]
-        print(f"{s.name:16} {gib(weights):>10.1f} GiB | {gib(row[0]):>21.2f} GiB "
-              f"{gib(row[1]):>9.2f} GiB {gib(row[2]):>16.2f} GiB")
-    print("-> Long contexts x many concurrent users make the *cache*, not the weights, the "
-          "bottleneck.\n   (This is why GQA, cache quantisation and PagedAttention exist - Weeks 9 and 11.)")
+        print(
+            f"{s.name:16} {gib(weights):>10.1f} GiB | {gib(row[0]):>21.2f} GiB "
+            f"{gib(row[1]):>9.2f} GiB {gib(row[2]):>16.2f} GiB"
+        )
+    print(
+        "-> Long contexts x many concurrent users make the *cache*, not the weights, the "
+        "bottleneck.\n   (This is why GQA, cache quantisation and PagedAttention exist - Weeks 9 and 11.)"
+    )
 
     # 3) Why the cache exists: generation with vs. without it.
     def generate(use_cache: bool, n_new: int = 30) -> float:
@@ -94,8 +103,11 @@ def part_a(model, tok) -> None:
         t0, past, nxt = time.perf_counter(), None, ids
         with torch.no_grad():
             for _ in range(n_new):
-                out = model(input_ids=nxt if use_cache else x,
-                            past_key_values=past if use_cache else None, use_cache=use_cache)
+                out = model(
+                    input_ids=nxt if use_cache else x,
+                    past_key_values=past if use_cache else None,
+                    use_cache=use_cache,
+                )
                 token = out.logits[0, -1].argmax().view(1, 1)
                 if use_cache:
                     past, nxt = out.past_key_values, token
@@ -103,17 +115,28 @@ def part_a(model, tok) -> None:
         return time.perf_counter() - t0
 
     with_cache, without = generate(True), generate(False)
-    print(f"\nGenerating 30 tokens after a {ids.shape[1]}-token prompt on CPU: "
-          f"with cache {with_cache:.1f}s | without {without:.1f}s | speed-up x{without / with_cache:.1f}")
-    print("Without the cache every new token re-reads the entire prompt; the gap widens with length.")
+    print(
+        f"\nGenerating 30 tokens after a {ids.shape[1]}-token prompt on CPU: "
+        f"with cache {with_cache:.1f}s | without {without:.1f}s | speed-up x{without / with_cache:.1f}"
+    )
+    print(
+        "Without the cache every new token re-reads the entire prompt; the gap widens with length."
+    )
 
 
 # ----------------------------------------------------------------- Part B: the bill
 
 
-def conversation_cost(turns: int, new_tokens_per_turn: int, reply_tokens: int, *,
-                      in_price: float, out_price: float, cache_read_mult: float = 1.0,
-                      history_cap: int | None = None) -> float:
+def conversation_cost(
+    turns: int,
+    new_tokens_per_turn: int,
+    reply_tokens: int,
+    *,
+    in_price: float,
+    out_price: float,
+    cache_read_mult: float = 1.0,
+    history_cap: int | None = None,
+) -> float:
     """USD cost of a chat where each turn resends the (possibly capped) history.
 
     cache_read_mult=0.1 models prompt caching (cached prefix read at 10% of the input price).
@@ -130,9 +153,16 @@ def conversation_cost(turns: int, new_tokens_per_turn: int, reply_tokens: int, *
 
 
 def part_b() -> None:
-    print("\n" + "=" * 84 + "\nPART B - the chat bill (claude-opus-5 prices: $5 in / $25 out per MTok)\n" + "=" * 84)
+    print(
+        "\n"
+        + "=" * 84
+        + "\nPART B - the chat bill (claude-opus-5 prices: $5 in / $25 out per MTok)\n"
+        + "=" * 84
+    )
     kw = {"new_tokens_per_turn": 300, "reply_tokens": 400, "in_price": 5.0, "out_price": 25.0}
-    print(f"{'turns':>6} {'naive':>9} {'cached':>9} {'window 4k':>10} {'cached+window':>14}   (USD)")
+    print(
+        f"{'turns':>6} {'naive':>9} {'cached':>9} {'window 4k':>10} {'cached+window':>14}   (USD)"
+    )
     for turns in (5, 20, 50, 100):
         naive = conversation_cost(turns, **kw)
         cached = conversation_cost(turns, cache_read_mult=0.1, **kw)
@@ -140,13 +170,18 @@ def part_b() -> None:
         both = conversation_cost(turns, cache_read_mult=0.1, history_cap=4000, **kw)
         print(f"{turns:>6} {naive:>9.2f} {cached:>9.2f} {window:>10.2f} {both:>14.2f}")
     crossover = next(
-        t for t in range(1, 5000)
+        t
+        for t in range(1, 5000)
         if conversation_cost(t, history_cap=4000, **kw)
         < conversation_cost(t, cache_read_mult=0.1, **kw)
     )
-    print(f"A 4k window alone only beats caching alone from turn {crossover} "
-          "(caching still pays ~10% for the whole history, the window stops paying for it).")
-    print("-> Naive cost grows ~quadratically with turns (you re-pay for every old token every turn).")
+    print(
+        f"A 4k window alone only beats caching alone from turn {crossover} "
+        "(caching still pays ~10% for the whole history, the window stops paying for it)."
+    )
+    print(
+        "-> Naive cost grows ~quadratically with turns (you re-pay for every old token every turn)."
+    )
     print("   Caching cuts the repeated part ~90%; bounding the history stops the growth entirely.")
 
 
@@ -194,16 +229,24 @@ def part_c() -> None:
     for label, cache in (("NO caching", False), ("WITH caching", True)):
         rows = run(cache)
         print(f"\n{label}")
-        print(f"{'call':>4} {'fresh_in':>9} {'cache_write':>12} {'cache_read':>11} {'latency':>8} {'cost$':>9}")
+        print(
+            f"{'call':>4} {'fresh_in':>9} {'cache_write':>12} {'cache_read':>11} {'latency':>8} {'cost$':>9}"
+        )
         for i, r in enumerate(rows, 1):
             u = r.usage
-            print(f"{i:>4} {u.input_tokens:>9} {u.cache_write_tokens:>12} {u.cache_read_tokens:>11} "
-                  f"{r.latency_s:>7.2f}s {r.cost_usd:>9.5f}")
-        print(f"{'sum':>4} {'':>9} {'':>12} {'':>11} {sum(r.latency_s for r in rows):>7.2f}s "
-              f"{sum(r.cost_usd for r in rows):>9.5f}")
-    print("\nExpect: call 1 pays a ~1.25x cache *write*; calls 2-4 read the prefix at ~0.1x and are "
-          "faster.\nIf cache_read stays 0, something in the prefix changes between calls "
-          "(timestamps, IDs, reordered JSON)\nor the prefix is below the model's minimum cacheable size.")
+            print(
+                f"{i:>4} {u.input_tokens:>9} {u.cache_write_tokens:>12} {u.cache_read_tokens:>11} "
+                f"{r.latency_s:>7.2f}s {r.cost_usd:>9.5f}"
+            )
+        print(
+            f"{'sum':>4} {'':>9} {'':>12} {'':>11} {sum(r.latency_s for r in rows):>7.2f}s "
+            f"{sum(r.cost_usd for r in rows):>9.5f}"
+        )
+    print(
+        "\nExpect: call 1 pays a ~1.25x cache *write*; calls 2-4 read the prefix at ~0.1x and are "
+        "faster.\nIf cache_read stays 0, something in the prefix changes between calls "
+        "(timestamps, IDs, reordered JSON)\nor the prefix is below the model's minimum cacheable size."
+    )
 
 
 if __name__ == "__main__":

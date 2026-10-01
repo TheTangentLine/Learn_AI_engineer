@@ -43,6 +43,7 @@ DEFAULT_MODELS: dict[str, str] = {
     "anthropic": "claude-opus-5",
     "openai": "gpt-6.1-sol",
     "ollama": "llama3.2:3b",
+    "local": "Qwen/Qwen2.5-0.5B-Instruct",  # in-process Hugging Face model: free, offline, weak
 }
 
 # A cheaper model per provider for bulk work, judges and sub-tasks.
@@ -50,6 +51,7 @@ CHEAP_MODELS: dict[str, str] = {
     "anthropic": "claude-haiku-4-5",
     "openai": "gpt-6-luna",
     "ollama": "llama3.2:3b",
+    "local": "Qwen/Qwen2.5-0.5B-Instruct",
 }
 
 # USD per 1M tokens: (input, cached-input read, output).
@@ -284,6 +286,26 @@ def _parse_ollama(r) -> Parsed:
 # ---------------------------------------------------------------------- public API
 
 
+def _complete_local(
+    msgs: list[dict[str, Any]], system: str | None, model: str, max_tokens: int, t0: float
+):
+    """The in-process local model: supports complete() and common.chat.turn() only (no streaming/structured)."""
+    from .local_llm import LocalChat
+
+    user = next((m["content"] for m in reversed(msgs) if m["role"] == "user"), "")
+    text = LocalChat(model)(
+        system, user if isinstance(user, str) else str(user), min(max_tokens, 256)
+    )
+    return _finish("local", model, t0, None, (text, Usage(), "stop"))
+
+
+def _no_local(provider: str, what: str) -> None:
+    if provider == "local":
+        raise NotImplementedError(
+            f"the 'local' provider does not support {what}; use complete() or chat.turn()"
+        )
+
+
 def complete(
     messages: Messages,
     *,
@@ -306,6 +328,8 @@ def complete(
     if provider == "openai":
         r = _openai().responses.create(**_openai_kwargs(model, msgs, system, max_tokens, extra))
         return _finish(provider, model, t0, r, _parse_openai(r))
+    if provider == "local":
+        return _complete_local(msgs, system, model, max_tokens, t0)
     r = _ollama().chat.completions.create(**_ollama_kwargs(model, msgs, system, max_tokens, extra))
     return _finish(provider, model, t0, r, _parse_ollama(r))
 
@@ -333,6 +357,8 @@ async def acomplete(
         kw = _openai_kwargs(model, msgs, system, max_tokens, extra)
         r = await _openai(True).responses.create(**kw)
         return _finish(provider, model, t0, r, _parse_openai(r))
+    if provider == "local":
+        return _complete_local(msgs, system, model, max_tokens, t0)
     kw = _ollama_kwargs(model, msgs, system, max_tokens, extra)
     r = await _ollama(True).chat.completions.create(**kw)
     return _finish(provider, model, t0, r, _parse_ollama(r))
@@ -351,6 +377,7 @@ def stream(
 ) -> Iterator[str]:
     """Yield text chunks as they arrive. ``on_done`` receives the final LLMResponse."""
     provider, model = resolve(provider, model)
+    _no_local(provider, "streaming")
     msgs = _to_messages(messages)
     t0 = time.perf_counter()
     parts: list[str] = []
@@ -405,6 +432,7 @@ async def astream(
 ) -> AsyncIterator[str]:
     """Async twin of :func:`stream` (used by the FastAPI backend in Week 11)."""
     provider, model = resolve(provider, model)
+    _no_local(provider, "async streaming")
     msgs = _to_messages(messages)
     t0 = time.perf_counter()
     parts: list[str] = []
@@ -458,6 +486,7 @@ def structured(
 ) -> tuple[T, LLMResponse]:
     """Return a validated Pydantic object using each provider's native structured output."""
     provider, model = resolve(provider, model)
+    _no_local(provider, "structured output")
     msgs = _to_messages(messages)
     t0 = time.perf_counter()
 
@@ -489,15 +518,20 @@ def available_providers() -> list[str]:
         found.append("openai")
     if _ollama_running():
         found.append("ollama")
+    import importlib.util
+
+    if importlib.util.find_spec("torch") and importlib.util.find_spec("transformers"):
+        found.append("local")
     return found
 
 
 def _ollama_running() -> bool:
+    """Is an OpenAI-compatible local server (Ollama, vLLM...) answering GET {base}/models?"""
     import urllib.request
 
-    base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1").removesuffix("/v1")
+    base = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1").rstrip("/")
     try:
-        with urllib.request.urlopen(f"{base}/api/tags", timeout=0.5):
+        with urllib.request.urlopen(f"{base}/models", timeout=0.5):
             return True
     except OSError:
         return False

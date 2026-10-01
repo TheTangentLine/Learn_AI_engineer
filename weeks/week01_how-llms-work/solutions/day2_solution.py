@@ -79,8 +79,10 @@ def part_a(hf_tok) -> None:
         n_qwen = len(hf_tok.encode(text))
         n_claude = str(claude(text)) if claude else "-"
         costs = " / ".join(f"{n_o200k * p:,.2f}" for p in INPUT_PRICES.values())
-        print(f"{name:14} {len(text):>5} {n_o200k:>6} {n_qwen:>5} {n_claude:>6} "
-              f"{len(text) / n_o200k:>9.2f}  {costs}")
+        print(
+            f"{name:14} {len(text):>5} {n_o200k:>6} {n_qwen:>5} {n_claude:>6} "
+            f"{len(text) / n_o200k:>9.2f}  {costs}"
+        )
 
     print("\nToken boundaries (o200k_base):")
     for text in ["Strawberry", " strawberry", "9.11 is greater than 9.9"]:
@@ -119,9 +121,9 @@ def answer_with_logprobs(model, tok, question: str, max_new_tokens: int = 24):
     for _ in range(max_new_tokens):
         out = model(input_ids=next_input, past_key_values=past, use_cache=True)
         past = out.past_key_values
-        logits = out.logits[0, -1]                      # scores for every vocab entry
-        logprobs = torch.log_softmax(logits, dim=-1)    # normalise -> log P(token | context)
-        token_id = int(torch.argmax(logprobs))          # greedy choice
+        logits = out.logits[0, -1]  # scores for every vocab entry
+        logprobs = torch.log_softmax(logits, dim=-1)  # normalise -> log P(token | context)
+        token_id = int(torch.argmax(logprobs))  # greedy choice
         if token_id == tok.eos_token_id or token_id in tok.all_special_ids:
             break
         top = torch.topk(logprobs, 3)
@@ -141,8 +143,13 @@ def confidence_report(steps, threshold: float):
     """
     content = [s for s in steps if any(c.isalnum() for c in s[0])]
     if not content:
-        return {"answer": "", "min_prob": 0.0, "weakest_token": "", "alternatives": [],
-                "flagged": True}
+        return {
+            "answer": "",
+            "min_prob": 0.0,
+            "weakest_token": "",
+            "alternatives": [],
+            "flagged": True,
+        }
     weakest = min(range(len(content)), key=lambda i: content[i][1])
     return {
         "answer": "".join(t for t, _, _ in steps).strip(),
@@ -164,15 +171,19 @@ def part_b(model, tok, threshold: float = 0.5) -> None:
         "What is the 4th word of the 2nd chapter of the novel 'The Glass Orchard' by Mira Toll?",
     ]
     print("\n" + "=" * 88)
-    print(f"PART B - Confidence flagger (local {LOCAL_MODEL}, flag if weakest token p < {threshold})")
+    print(
+        f"PART B - Confidence flagger (local {LOCAL_MODEL}, flag if weakest token p < {threshold})"
+    )
     print("=" * 88)
     for q in questions:
         rep = confidence_report(answer_with_logprobs(model, tok, q), threshold)
         flag = "LOW CONFIDENCE" if rep["flagged"] else "ok"
         alts = ", ".join(f"{t!r} {p:.0%}" for t, p in rep["alternatives"])
         print(f"\nQ: {q}\nA: {rep['answer']}")
-        print(f"   [{flag}] min p={rep['min_prob']:.2f} at {rep['weakest_token']!r} "
-              f"(alternatives: {alts})")
+        print(
+            f"   [{flag}] min p={rep['min_prob']:.2f} at {rep['weakest_token']!r} "
+            f"(alternatives: {alts})"
+        )
 
     print(
         "\nReading the result: real facts ('capital of France', 'WWII end year') score near\n"

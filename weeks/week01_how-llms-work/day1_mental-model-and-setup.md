@@ -35,6 +35,16 @@ A neural network is a **directed acyclic graph of matrix multiplications**.
 
 ## 3. How it learns: TDD on steroids
 
+```mermaid
+flowchart LR
+    D["Text batch"] --> F["Forward pass: predict next tokens"]
+    F --> L["Loss: how wrong was it?"]
+    L --> B["Backward pass: blame each weight"]
+    B --> O["Optimizer: nudge the weights"]
+    O --> F
+```
+
+
 The training loop runs billions of times:
 
 1. **Forward pass (execution):** feed in text and predict the next token.
@@ -61,6 +71,20 @@ You will run a small version of all three in Weeks 9–10.
    │ 3. decode loop      →  forward pass → logits → sample 1 token → append → repeat (Day 3)
    │ 4. stop             →  end-of-turn token, stop sequence, or max_tokens
    ▼ 5. detokenize       →  "The capital of France is Paris."
+```
+
+```mermaid
+sequenceDiagram
+    participant App as Your app
+    participant API as Provider API
+    participant GPU as Model on GPU
+    App->>API: messages + max_tokens
+    API->>GPU: tokenize, then prefill the whole prompt
+    loop until a stop condition
+        GPU->>GPU: forward pass, sample one token, append it
+        GPU-->>API: token (streamed if requested)
+    end
+    API-->>App: text + stop_reason + usage
 ```
 
 Four consequences you will feel all course long:
