@@ -1,0 +1,46 @@
+[project]
+name = "ai-engineer-roadmap"
+version = "0.1.0"
+description = "12-week AI Engineer roadmap: daily lessons, challenges and reference solutions"
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=1.11",
+    "openai>=3.22",
+    "python-dotenv>=1.2",
+    "pydantic>=2.13",
+    "tiktoken>=0.14",
+    "numpy>=2.5",
+    "matplotlib>=3.11",
+    "rich>=15.0",
+]
+
+[project.optional-dependencies]
+# Local open-weights models on CPU/GPU (Week 1 days 2-4, Week 9, Week 10)
+local = [
+    "torch>=2.14",
+    "transformers>=5.18",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15",
+    "pytest>=9.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["common"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+# Lesson/solution files embed sample output and long prose in docstrings.
+"weeks/**" = ["E501"]
