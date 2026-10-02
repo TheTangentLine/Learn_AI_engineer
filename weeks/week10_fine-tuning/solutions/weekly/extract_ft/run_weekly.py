@@ -15,7 +15,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 SOLUTIONS = HERE.parents[1]
-ROOT = HERE.parents[3]
+ROOT = HERE.parents[4]
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(SOLUTIONS))
 
@@ -227,7 +227,7 @@ def main(argv: list[str]) -> None:
         "not_run": [
             "a hosted frontier model, prompted or fine-tuned (no API key was used): its accuracy and real price are unknown",
             "GPU training, QLoRA, Unsloth/TRL (the LoRA and the loop are written from scratch and verified against PEFT)",
-            "Ollama/GGUF (not installed)",
+            "Ollama (not installed); the llama.cpp/GGUF route for this model is built and measured in Week 11",
         ],
         "limits": [
             "38 hand-written emails give wide intervals; a difference of a few emails is noise",

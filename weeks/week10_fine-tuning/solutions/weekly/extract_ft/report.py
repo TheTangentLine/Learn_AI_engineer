@@ -58,7 +58,7 @@ def build_report(m: dict) -> str:
             sysrows,
         ),
         "",
-        f"**Fine-tuned against the best prompt, paired on the same {c['n']} hand-written emails:** exact match {c['diff_exact']:+.2f} [{c['exact_low']:+.2f}, {c['exact_high']:+.2f}] (p = {c['p_exact']:.4f}; better on {c['wins']}, worse on {c['losses']}, tied on {c['ties']}); per-field accuracy {c['diff_fields']:+.2f} [{c['fields_low']:+.2f}, {c['fields_high']:+.2f}].",
+        f"**Fine-tuned against the best prompt, paired on the same {c['n']} hand-written emails:** exact match {c['diff_exact']:+.2f} [{c['exact_low']:+.2f}, {c['exact_high']:+.2f}] (p {'< 0.0001' if c['p_exact'] < 0.0001 else '= ' + format(c['p_exact'], '.4f')}; better on {c['wins']}, worse on {c['losses']}, tied on {c['ties']}); per-field accuracy {c['diff_fields']:+.2f} [{c['fields_low']:+.2f}, {c['fields_high']:+.2f}].",
         "",
         "## What it costs",
         md_table(

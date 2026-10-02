@@ -430,7 +430,7 @@ def test_error_ordering_on_normal_weights_and_the_formats_bit_costs():
     torch.manual_seed(0)
     w = torch.randn(256, 256) * 0.02
     err = {f: Q.relative_error(w, Q.fake_quantize(w, f)) for f in ("nf4", "int4", "q4_0", "q8_0")}
-    assert err["q8_0"] < 0.01 < err["nf4"] < err["int4"] and err["q4_0"] < err["int4"]
+    assert err["q8_0"] < 0.006 and 0.04 < err["nf4"] < err["int4"] and err["q4_0"] < err["int4"]
     assert (
         Q.BITS_PER_WEIGHT["q8_0"] == 8.5
         and Q.BITS_PER_WEIGHT["q4_0"] == 4.5

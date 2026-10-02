@@ -14,7 +14,7 @@ A fine-tune that exists only as a Python process is not a product. Today the ada
 
 ## 1. Merging
 
-LoRA's update is a matrix product, so it can be folded into the weight: `W' = W + (α/r)·B·A`. After merging the model is an **ordinary model** (no adapter layers, no extra matmuls, no extra latency). The solution measures it on the real run: the adapter model and the merged model give logits that differ by {{MERGE_GAP}}.
+LoRA's update is a matrix product, so it can be folded into the weight: `W' = W + (α/r)·B·A`. After merging the model is an **ordinary model** (no adapter layers, no extra matmuls, no extra latency). The solution measures it on the real run: the adapter model and the merged model give logits that differ by **1.2e-4** (4,884,480 adapter parameters folded into the weights; float32 noise over 30 layers).
 
 When to **keep** adapters unmerged: to serve many tasks from one base model by swapping a few megabytes; to keep the base weights untouched; to continue training. When to **merge**: to publish a single self-contained model, to convert to other formats (GGUF needs plain weights), to remove the (small) adapter latency.
 
@@ -34,7 +34,7 @@ A Hugging Face model is a **directory**:
 
 `export.save_hf_model` writes exactly that from the from-scratch decoder: `to_hf_state_dict` maps `layers.N.self_attn.q_proj.weight` to `model.layers.N.self_attn.q_proj.weight` (the inverse of the Week 9 loader) and **omits the output matrix when it is tied** to the embedding table (the original checkpoint does the same: it stores the table once). Tests: export then load reproduces the weights **exactly** (tied and untied), and a merged LoRA model exported to a directory is loaded by `AutoModelForCausalLM.from_pretrained` with logits within 1e-4.
 
-{{EXPORT}}
+**On the real run:** the merged model was exported to `outputs/w10_model/` as `README.md, chat_template.jinja, config.json, model.safetensors, tokenizer.json, tokenizer_config.json`. `AutoModelForCausalLM.from_pretrained` loaded it and its logits differ from the from-scratch decoder's by **6.2e-5**; on a real email the library's `generate` and the from-scratch cached generator produced the **identical** JSON object. The pre-publication audit found **no problems**. (`transformers` wrote the chat template as its own file, `chat_template.jinja`: it travels with the tokenizer.)
 
 ## 3. Quantisation: smaller, faster, a little worse
 
@@ -52,23 +52,49 @@ Weights are stored in 16 or 32 bits; most of that precision is not needed. **Qua
 
 `solutions/quant.py` implements Q8_0, Q4_0, NF4 and a uniform 4-bit grid from scratch, with tests (Q4_0's rule that the largest-magnitude value maps to the end of the range; zeros stay zeros; padding to whole blocks). **GPTQ and AWQ are described here, not implemented**: both need calibration data and a per-layer solver.
 
-{{QUANT}}
+**Measured on the fine-tuned model** (every Linear weight in the 30 blocks rounded to the format and reconstructed; the embedding table, norms and output matrix untouched; evaluated on the 38 hand-written and 50 held-out synthetic emails, exact match with 95% Wilson intervals):
+
+| format | size (MB) | bits / weight | hand-written exact | field acc | synthetic exact (n=50) | field acc |
+|---|---|---|---|---|---|---|
+| fp32 (unquantised) | 538 | 32 | 74% [58%, 85%] | 89% | 92% [81%, 97%] | 97% |
+| **Q8_0** | **169** | 8.5 | **74%** [58%, 85%] | **89%** | **92%** [81%, 97%] | **97%** |
+| Q4_0 | 116 | 4.5 | 24% [13%, 39%] | 34% | 24% [14%, 37%] | 48% |
+| NF4 | 116 | 4.5 | 50% [35%, 65%] | 80% | 34% [22%, 48%] | 70% |
+| uniform int4 | 116 | 4.5 | **0%** [0%, 9%] | 0% | 0% [0%, 7%] | 0% |
+
+(Sizes: the 30 blocks at the format's bits per weight, **plus the 28M-parameter embedding table and the norms kept at fp16** (about 57 MB): that is why 4-bit is 116 MB and not 76 MB.)
+
+- **Q8_0 is free**: the same exact-match rate on both sets and the same field accuracy, at **31% of the fp32 size**. That is the safe default.
+- **4-bit is not free on a model this small.** Q4_0 cuts the hand-written exact match from 74% to **24%**, NF4 to **50%**, and a plain uniform 4-bit grid destroys the model (**0%**). The ordering follows the reconstruction errors of Day 3 (NF4 beats uniform; Q4_0 has the smaller blocks) except that **Q4_0 does worse than NF4 here despite lower error on normal weights**: a plausible reason (I did not isolate it) is that Q4_0 scales every weight in a block by its largest-magnitude one, and real weight matrices have outliers that random normal weights lack. The uniform grid has **no exact zero** among its 16 values, so every near-zero weight is pushed to about ±7% of its block's scale, which is the most likely reason it fails so completely (also untested in isolation).
+- **Small models quantise worse than large ones.** A 135M-parameter model has little redundancy to give away; the published results that 4-bit loses little are for models with billions of parameters. Do not carry this table to a 7B model, and do not carry that claim to this one.
+- The loss is in **structured output**: field accuracy falls more gently (80% for NF4) than exact match (50%): one wrong character in a JSON object fails the whole answer. That is why measuring *your task* matters more than perplexity.
+- These are **simulated** quantised models (fp32 tensors holding the rounded values): the accuracy numbers are exact, but nothing here ran faster or used less memory.
 
 **Simulation, not deployment.** The quantised models above are fp32 tensors holding *rounded values*, so they show the **accuracy** cost exactly but **not the speed or memory benefit** (that needs a runtime that stores and multiplies the packed formats: llama.cpp, bitsandbytes, vLLM). Treat the size column as the format's storage size, which is what a GGUF file of that type would take.
 
 ## 4. Local runtimes and publishing (prepared, not run)
 
-**Ollama / llama.cpp (not run: neither is installed here).** The path: convert the merged Hugging Face directory to **GGUF** with llama.cpp's `convert_hf_to_gguf.py`, optionally quantise with `llama-quantize`, then write a **Modelfile**:
+**Ollama (not run: not installed) and llama.cpp (installed afterwards; Week 11 Day 1 converts exactly this model to GGUF, quantises it with `llama-quantize` and serves it with `llama-server`, with measured results).** The path: convert the merged Hugging Face directory to **GGUF** with llama.cpp's `convert_hf_to_gguf.py`, optionally quantise with `llama-quantize`, then write a **Modelfile**:
 
 ```
-{{MODELFILE}}
+FROM ./order-extractor.gguf
+TEMPLATE """{{ if .System }}<|im_start|>system
+{{ .System }}<|im_end|>
+{{ end }}{{ if .Prompt }}<|im_start|>user
+{{ .Prompt }}<|im_end|>
+{{ end }}<|im_start|>assistant
+{{ .Response }}<|im_end|>"""
+SYSTEM """Extract the order from the email as JSON."""
+PARAMETER temperature 0.0
+PARAMETER stop "<|im_end|>"
+PARAMETER stop "<|im_start|>"
 ```
 
 and `ollama create order-extractor -f Modelfile`. `export.ollama_modelfile` generates this text and a test checks the weights path, the ChatML template, the system prompt, the temperature and both stop tokens. **The template and stop tokens matter**: a Modelfile with a different template from training is the Day 1 mismatch again, and a missing `<|im_end|>` stop token produces output that runs on forever.
 
 **Hugging Face Hub (not run: needs a token).** `HfApi().upload_folder(folder_path=..., repo_id="<you>/order-extractor", repo_type="model")` uploads the directory. `export.audit_directory` is the checklist to run first: the files a loader needs exist; the model card has front matter naming the **base model** (licence and lineage matter) and reports results; and no text file contains something that looks like a credential (`hf_...`, `sk-...`, `ghp_...`, `AKIA...`). Also check: the licence of the base model permits your use; the training data may be published; no personal data was in it (Week 8); the card states the **limitations** you measured.
 
-**Hosted fine-tuning APIs (not run: needs a key).** Hosted services fine-tune models you cannot download: you upload a **chat-format JSONL** and pay per **training token** (dataset tokens × epochs), then per inference token at a higher rate than the base model. `export.to_openai_jsonl` writes the layout and `validate_openai_jsonl` checks the rules such a service enforces before you pay for a failed job (valid JSON per line, a messages list, known roles, string content, at least one assistant message, a minimum number of examples). {{HOSTED}} Trade-offs against self-hosting: no GPUs to run and nothing to deploy, but you do not get the weights, the price per token is the provider's, the model may be retired, and not every provider offers every base model.
+**Hosted fine-tuning APIs (not run: needs a key).** Hosted services fine-tune models you cannot download: you upload a **chat-format JSONL** and pay per **training token** (dataset tokens × epochs), then per inference token at a higher rate than the base model. `export.to_openai_jsonl` writes the layout and `validate_openai_jsonl` checks the rules such a service enforces before you pay for a failed job (valid JSON per line, a messages list, known roles, string content, at least one assistant message, a minimum number of examples). On this run: **1,112 training lines, the format check passes, 158,745 dataset tokens × 3 epochs = 476,235 billed tokens**, which at an **assumed** price of $8 per million training tokens would be **$3.81** (the price is an input to `estimate_training_cost`, not a quote). Trade-offs against self-hosting: no GPUs to run and nothing to deploy, but you do not get the weights, the price per token is the provider's, the model may be retired, and not every provider offers every base model.
 
 ## 5. Pitfalls
 - **Publishing without the chat template**: the user has to guess your prompt format.
@@ -92,7 +118,7 @@ and `ollama create order-extractor -f Modelfile`. `export.ollama_modelfile` gene
 - Merged and adapter logits agree to within float noise; the exported directory loads with `transformers` and agrees to 1e-4.
 - The audit passes on your directory and *fails* when you plant a fake token or delete the card's front matter.
 - The quantisation table reports accuracy **with intervals** and says which differences are within noise.
-- Everything you did not run (GGUF conversion, Ollama, the Hub, a hosted job) is labelled as such.
+- Everything you did not run (Ollama, the Hub, a hosted job) is labelled as such; the GGUF conversion is done in Week 11.
 
 **Stretch**
 - If `llama.cpp` and Ollama are available (a `brew install` away), convert to GGUF Q4_K_M, run the Modelfile, and compare the GGUF model's answers with the Hugging Face model's on the 38 emails.

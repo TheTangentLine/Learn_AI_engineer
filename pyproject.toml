@@ -60,6 +60,22 @@ finetune = [
     "peft>=0.21",
     "accelerate>=1.15",
 ]
+# Serving (Week 11): the FastAPI gateway, the Streamlit UI, retrieval, and the tools that read and convert GGUF files. llama.cpp itself (`brew install llama.cpp`) and Docker are
+# separate installs; the GGUF converter script comes from the llama.cpp source tree and needs torch, transformers, gguf and sentencepiece (versions used while writing: fastapi 0.142,
+# uvicorn 0.54, streamlit 1.64, gguf 0.19).
+serve = [
+    "torch>=2.14",
+    "transformers>=5.18",
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "httpx>=0.27",
+    "streamlit>=1.40",
+    "rank-bm25>=0.2",
+    "gguf>=0.10",
+    "sentencepiece>=0.2",
+    "huggingface-hub>=0.30",
+    "pyyaml>=6",
+]
 # DSPy (Week 2 Day 6). Its litellm dependency pins openai<3; pip warns but it coexists - or use a separate venv.
 dspy = ["dspy>=3.4"]
 

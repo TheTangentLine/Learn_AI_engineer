@@ -110,7 +110,7 @@ Per-field accuracy of the 3-shot prompt: is_order 18%, customer_name 39%, order_
 What this says:
 - **Zero-shot is hopeless** for a 135M model: 79% of replies are not even JSON (it rambles, repeats, or mixes prose into the object).
 - **Three examples fix the format** (97% valid JSON) **but not the task**: only 1 email in 38 is fully right and the field accuracy is 39%. The model has copied the *shape* of the examples, not learned to read the email: it says `is_order: false` for most real orders (18% right on that field). Failures cover the three kinds worth separating: valid-but-wrong fields, an **invalid order** (a total without a currency) and **not JSON at all** (`Extra data` after a first object).
-- **Prompting is also the expensive option here**: the 3-shot prompt is **593 tokens** per email, while an email plus a one-line instruction is about **85**. At volume you pay for those 500 extra tokens on *every* call. A fine-tuned model needs no examples in the prompt.
+- **Prompting is also the expensive option here**: the 3-shot prompt is **593 tokens** per email, while an email plus a one-line instruction is about **60** tokens on average (85 for the first email). At volume you pay for those 500 extra tokens on *every* call. A fine-tuned model needs no examples in the prompt.
 
 A fair baseline matters. The first schema prompt contained the example id `A-1042`, and the model copied it into most of the first replies I looked at; the evaluation prompt now tells the model to copy the id "exactly as written in the email" and a test asserts that no example id appears in it. **A baseline you have handicapped proves nothing.**
 
@@ -125,7 +125,7 @@ A decision memo is one page that a colleague can disagree with:
 5. **Cost and risk**: data to build (Day 2), compute (CPU minutes here; a GPU-hour for a bigger model), maintenance (a new schema means new data and a re-train), **forgetting** (Day 4), and what a frontier model would cost per request instead (not measured here: no hosted-model key was used).
 6. **Decision and a kill criterion**: "fine-tune; if a 1,000-example LoRA does not reach X on the hand-written set, stop and use a hosted model."
 
-For this task the evidence supports fine-tuning **conditionally**: prompting a 135M model cannot reach the criteria, the format problem is exactly what fine-tuning is good at, the volume argument (593 against 85 tokens) is real, and a kill criterion exists. What the evidence does *not* show is that fine-tuning will work, or that it beats a hosted frontier model with a good prompt: both are tested on Days 4 and 7 (the second only as a labelled cost estimate).
+For this task the evidence supports fine-tuning **conditionally**: prompting a 135M model cannot reach the criteria, the format problem is exactly what fine-tuning is good at, the volume argument (593 against about 60 tokens) is real, and a kill criterion exists. What the evidence does *not* show is that fine-tuning will work, or that it beats a hosted frontier model with a good prompt: both are tested on Days 4 and 7 (the second only as a labelled cost estimate).
 
 ## 7. Pitfalls
 - **Fine-tuning for facts.** Use retrieval.

@@ -1,0 +1,29 @@
+# Fly.io: NOT RUN (no account was used). A CPU-only gateway; the model servers would be separate Fly apps (or a GPU machine) reachable on the private network.
+app = "order-api-example"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  LLMAPI_BACKENDS = '{"order-extractor": "http://order-llama.internal:8080"}'
+  LLMAPI_MAX_INFLIGHT = "8"
+  # LLMAPI_KEYS and LLMAPI_ADMIN_TOKEN are set with `fly secrets set`, never in this file
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "15s"
+    method = "GET"
+    path = "/readyz"
+    timeout = "5s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

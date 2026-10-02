@@ -1,0 +1,144 @@
+{
+ "attack_successes": 4,
+ "errors": 0,
+ "items": {
+  "adv-1": {
+   "kind": "adversarial",
+   "passed": true
+  },
+  "adv-3": {
+   "kind": "adversarial",
+   "passed": true
+  },
+  "adv-5": {
+   "kind": "adversarial",
+   "passed": true
+  },
+  "mh-1": {
+   "kind": "multi",
+   "passed": true
+  },
+  "mh-3": {
+   "kind": "multi",
+   "passed": true
+  },
+  "mh-5": {
+   "kind": "multi",
+   "passed": true
+  },
+  "mh-7": {
+   "kind": "multi",
+   "passed": true
+  },
+  "oos-01": {
+   "kind": "out_of_scope",
+   "passed": true
+  },
+  "oos-03": {
+   "kind": "out_of_scope",
+   "passed": true
+  },
+  "oos-05": {
+   "kind": "out_of_scope",
+   "passed": true
+  },
+  "oos-07": {
+   "kind": "out_of_scope",
+   "passed": true
+  },
+  "oos-09": {
+   "kind": "out_of_scope",
+   "passed": true
+  },
+  "w01-a": {
+   "kind": "single",
+   "passed": true
+  },
+  "w01-c": {
+   "kind": "single",
+   "passed": true
+  },
+  "w01-e": {
+   "kind": "single",
+   "passed": true
+  },
+  "w02-a": {
+   "kind": "single",
+   "passed": false
+  },
+  "w02-c": {
+   "kind": "single",
+   "passed": true
+  },
+  "w02-e": {
+   "kind": "single",
+   "passed": false
+  },
+  "w03-b": {
+   "kind": "single",
+   "passed": true
+  },
+  "w03-d": {
+   "kind": "single",
+   "passed": true
+  },
+  "w04-a": {
+   "kind": "single",
+   "passed": true
+  },
+  "w04-c": {
+   "kind": "single",
+   "passed": true
+  },
+  "w05-a": {
+   "kind": "single",
+   "passed": true
+  },
+  "w05-c": {
+   "kind": "single",
+   "passed": false
+  },
+  "w06-a": {
+   "kind": "single",
+   "passed": true
+  },
+  "w06-c": {
+   "kind": "single",
+   "passed": false
+  },
+  "w07-b": {
+   "kind": "single",
+   "passed": true
+  },
+  "w07-d": {
+   "kind": "single",
+   "passed": true
+  },
+  "w08-b": {
+   "kind": "single",
+   "passed": false
+  },
+  "w08-d": {
+   "kind": "single",
+   "passed": true
+  },
+  "w09-b": {
+   "kind": "single",
+   "passed": true
+  },
+  "w10-a": {
+   "kind": "single",
+   "passed": false
+  },
+  "w10-c": {
+   "kind": "single",
+   "passed": true
+  },
+  "w11-b": {
+   "kind": "single",
+   "passed": true
+  }
+ },
+ "p95": 0.008758765575475991,
+ "retrieval": 0.9615384615384616
+}

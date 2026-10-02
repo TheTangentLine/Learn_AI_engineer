@@ -42,7 +42,7 @@ class _Cache:
         self.db = None
         if path is not None:
             path.parent.mkdir(parents=True, exist_ok=True)
-            self.db = sqlite3.connect(path)
+            self.db = sqlite3.connect(path, check_same_thread=False)  # a server calls us from worker threads; callers must serialise access (the Week 12 service holds a lock)
             self.db.execute("CREATE TABLE IF NOT EXISTS v (k TEXT PRIMARY KEY, dim INT, b BLOB)")
 
     @staticmethod

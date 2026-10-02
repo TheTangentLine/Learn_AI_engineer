@@ -35,7 +35,29 @@ flowchart LR
 
 ## What the pipeline found
 
-{{FOUND}}
+`run_weekly.py` produced `outputs/w10_report.md` on this machine (SmolLM2-135M-Instruct, Apple M2 CPU, greedy decoding). The numbers it contains, with their intervals:
+
+| system | valid order (hand-written) | exact match, hand-written (n = 38) | field accuracy | exact match, synthetic (n = 100) | prompt tokens | s / email |
+|---|---|---|---|---|---|---|
+| prompted base, zero-shot | 8% | 0% [0%, 9%] | 4% | 0% [0%, 4%] | 238 | 2.9 |
+| prompted base, 3-shot (the best prompt) | 76% | 3% [0%, 13%] | 39% | 2% [1%, 7%] | 593 | 1.7 |
+| **fine-tuned (LoRA r=16, merged)** | **92%** | **74%** [58%, 85%] | **89%** | **92%** [85%, 96%] | **60** | **1.2** |
+
+**Paired on the same 38 emails, fine-tuned against the 3-shot prompt:** exact match **+0.71** (95% interval **[+0.55, +0.84]**, p < 0.0001; better on **27** emails, worse on **0**, tied on 11); per-field accuracy **+0.50** [+0.37, +0.62].
+
+**Cost, under an assumed price card** ($0.50 per million input tokens and $1.50 per million output tokens, supplied as an input to `costs.PriceCard`; **no real price was looked up**), per 1,000 requests of this task:
+
+| system | prompt tokens | new tokens | hosted-style price | self-hosted (an assumed $0.20/hour CPU VM) |
+|---|---|---|---|---|
+| prompted base, zero-shot | 238 | 122 | $0.30 | $0.163 |
+| prompted base, 3-shot | 593 | 64 | $0.39 | $0.095 |
+| fine-tuned | 60 | 70 | **$0.14** | **$0.069** |
+
+The fine-tuned model is **2.8× cheaper per request than the best prompt under the hosted-style card** (the saving is the 533 prompt tokens no longer sent) and **1.4× cheaper to self-host** (it also generates its answer faster). The one-off cost, priced at the same VM rate, is **$0.08** for the 1,404-second training run: it is repaid after **about 300 requests** relative to the 3-shot prompt. Those two numbers say the *training* is cheap here; they do **not** include the cost of building the dataset (my time), of the evaluation set, or of maintenance when the schema changes, which are the real costs and which I did not price.
+
+**Forgetting:** the 36 unrelated probes fell from 31% to 25% and no unrelated prompt got an order object back (Day 4 has the breakdown).
+
+**What the report does *not* show:** how a hosted frontier model would do on the same 38 emails (not run), a seed-to-seed spread (one run), or anything about models larger than 135M.
 
 ## Acceptance criteria (the reference solution meets all of them)
 

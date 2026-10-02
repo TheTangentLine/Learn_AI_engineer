@@ -157,3 +157,27 @@ def test_cached_runs_generate_once_and_re_score_from_stored_replies(tmp_path, mo
 
 def test_cache_keys_differ_per_system_and_email():
     assert W.key("a", "b") != W.key("a", "c") and W.key("x") == W.key("x")
+
+
+def test_the_quick_pipeline_runs_end_to_end_and_writes_a_report(capsys):
+    """A smoke test of the whole pipeline on a handful of items (data -> a few training steps -> evaluation -> cost model -> report). It does not check accuracy."""
+    pytest.importorskip("transformers")
+    try:
+        from transformers import AutoTokenizer
+
+        AutoTokenizer.from_pretrained("HuggingFaceTB/SmolLM2-135M-Instruct")
+    except Exception as exc:  # noqa: BLE001
+        pytest.skip(f"SmolLM2 is not available: {exc}")
+    W.main(["--quick"])
+    out = capsys.readouterr().out
+    report = W.OUT / "w10_report_quick.md"
+    assert (
+        report.exists()
+        and "## Results" in out
+        and "## Assumptions" in out
+        and "not run" in out.lower()
+    )
+    assert (
+        "fine-tuned (LoRA, merged)" in report.read_text()
+        and "assumed hosted-style card" in report.read_text()
+    )

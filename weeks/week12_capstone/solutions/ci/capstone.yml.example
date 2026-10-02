@@ -1,0 +1,28 @@
+# NOT RUN: a sketch of the CI workflow for the Course Copilot (no GitHub Actions run was used while writing it).
+# Layers, cheapest first: unit tests (seconds, no models) -> the golden-set gate on the dev split (about two minutes, needs the embedding and re-ranking models).
+name: capstone
+on:
+  pull_request:
+    paths: ["weeks/week12_capstone/**", "common/**"]
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --extra serve --group dev
+      - run: uv run ruff check weeks/week12_capstone
+      - run: uv run pytest weeks/week12_capstone/solutions -q
+  golden-gate:
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/cache@v4            # the models are large: cache them between runs
+        with:
+          path: ~/.cache/huggingface
+          key: hf-bge-small-and-reranker-base
+      - run: uv sync --extra serve
+      - name: golden set + security suite, compared with the stored baseline
+        run: uv run python weeks/week12_capstone/solutions/ci_gate.py   # exit code 1 = the contract no longer holds; the output names the items

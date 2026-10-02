@@ -30,7 +30,7 @@ class Reranker:
         self.calls = 0  # model forward passes (pairs), excluding cache hits
         if cache_path is not None:
             cache_path.parent.mkdir(parents=True, exist_ok=True)
-            self.db = sqlite3.connect(cache_path)
+            self.db = sqlite3.connect(cache_path, check_same_thread=False)  # a server calls us from worker threads; callers must serialise access (the Week 12 service holds a lock)
             self.db.execute("CREATE TABLE IF NOT EXISTS s (k TEXT PRIMARY KEY, v REAL)")
 
     def _key(self, q: str, p: str) -> str:

@@ -20,11 +20,11 @@ A hands-on path from "I can call an API" to "I can design, evaluate, secure, fin
 | **4 · Production quality** | [7](weeks/week07_evals-observability-llmops/) | Evals, LLM-as-judge, CI gates, tracing, cost & latency, A/B tests & drift | Production harness for Week 6 |
 | | [8](weeks/week08_security-and-guardrails/) | Security: threat models, prompt injection, guardrails, agent permissions, privacy, grounding, red-teaming | Red-team & harden three systems; report + regression suite |
 | **5 · Models** | [9](weeks/week09_transformers-from-scratch/) | Transformers from scratch: PyTorch, BPE, attention, the Qwen2 decoder, training a mini-GPT, MoE, FlashAttention | KV cache + top-p sampling, benchmarked |
-| | 10 | Fine-tuning: SFT, LoRA/QLoRA, DPO, merge & export | Small model beats prompted base |
-| | 11 | Inference & deployment: quantisation, vLLM, FastAPI, Docker | Deploy + load test |
-| **6 · Capstone** | 12 | A production AI product, end to end | Demo + portfolio README |
+| | [10](weeks/week10_fine-tuning/) | Fine-tuning: when to tune, data curation, LoRA SFT, evaluation, DPO, merge/quantise/export | Small model beats prompted base |
+| | [11](weeks/week11_inference-serving-deployment/) | Inference & deployment: GGUF/llama.cpp, continuous batching, GPU & cost math, FastAPI gateway, chat UI, Docker | RAG API + fine-tuned model deployed in Docker, load-tested |
+| **6 · Capstone** | [12](weeks/week12_capstone/) | A production AI product, end to end: spec and golden set, retrieval, core flow, guards and CI, serving, observability, demo and retrospective | Demo, portfolio README, retrospective, interview checklist |
 
-> **Status:** Weeks 1–9 are written (lessons, solutions, tests); Weeks 10–12 are being added one at a time, each building on the previous weeks' artifacts. Run `./scripts/check.sh` to lint and run every offline test.
+> **Status:** All 12 weeks are written (lessons, solutions, tests), each building on the previous weeks' artifacts. Run `./scripts/check.sh` to lint and run every offline test.
 
 ## Setup
 

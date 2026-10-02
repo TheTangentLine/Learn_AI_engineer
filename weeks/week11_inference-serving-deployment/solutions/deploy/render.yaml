@@ -1,0 +1,14 @@
+# Render: NOT RUN (no account was used). A web service built from the Dockerfile; secrets are entered in the dashboard (sync: false).
+services:
+  - type: web
+    name: order-api-example
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    envVars:
+      - key: LLMAPI_BACKENDS
+        value: '{"order-extractor": "https://order-llama.example.internal"}'
+      - key: LLMAPI_KEYS
+        sync: false
+      - key: LLMAPI_ADMIN_TOKEN
+        sync: false

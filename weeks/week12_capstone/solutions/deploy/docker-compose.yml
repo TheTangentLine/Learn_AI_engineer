@@ -1,0 +1,17 @@
+# Course Copilot: one container. The index and the model cache are mounted read-only; secrets come from the environment.
+#   python build_context.py /tmp/copilot-ctx
+#   API_CONTEXT=/tmp/copilot-ctx INDEX_DIR=../../../outputs/w12_index HF_CACHE=$HOME/.cache/huggingface docker compose --env-file .env up --build
+services:
+  copilot:
+    build: ${API_CONTEXT:?run build_context.py and set API_CONTEXT}
+    environment:
+      COPILOT_KEYS: "${COPILOT_KEYS:?set COPILOT_KEYS in .env (a JSON list: see .env.example)}"
+      COPILOT_ADMIN_TOKEN: "${COPILOT_ADMIN_TOKEN:?set COPILOT_ADMIN_TOKEN in .env}"
+      COPILOT_GATE: rerank
+      COPILOT_GATE_TAU: "${COPILOT_GATE_TAU:--1.94}"
+    volumes:
+      - "${INDEX_DIR:?set INDEX_DIR to a directory written by ingest.build_index}:/data/index:ro"
+      - "${HF_CACHE:?set HF_CACHE to your Hugging Face cache (the embedder and the re-ranker)}:/models/hf:ro"
+    ports: ["127.0.0.1:${API_PORT:-8000}:8000"]
+    mem_limit: 2g
+    restart: unless-stopped

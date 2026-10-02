@@ -1,0 +1,42 @@
+# The whole stack: two llama.cpp model servers (the fine-tuned extractor and a general chat model) behind the API gateway.
+#   docker compose --env-file .env up --build
+# Models are mounted read-only from $MODELS_DIR (default ./models) (GGUF files; see the Day 1 and Day 6 lessons for how they are made); they are never baked into an image.
+services:
+  llama-extractor:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    command: ["-m", "/models/order-extractor-Q8_0.gguf", "--host", "0.0.0.0", "--port", "8080", "-c", "4096", "-np", "4", "--metrics"]
+    volumes: ["${MODELS_DIR:-./models}:/models:ro"]
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  llama-chat:  # -c is divided among the -np slots: 8192/4 = 2048 tokens per request, enough for a question plus four retrieved passages (4096/4 was not)
+    image: ghcr.io/ggml-org/llama.cpp:server
+    command: ["-m", "/models/qwen2.5-0.5b-instruct-Q8_0.gguf", "--host", "0.0.0.0", "--port", "8080", "-c", "8192", "-np", "4", "--metrics"]
+    volumes: ["${MODELS_DIR:-./models}:/models:ro"]
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  api:
+    build: ${API_CONTEXT:-.}   # the directory build_context.py assembles (llmapi/, docs/, Dockerfile): `python build_context.py /tmp/ctx`, then API_CONTEXT=/tmp/ctx
+    environment:
+      LLMAPI_BACKENDS: '{"order-extractor": "http://llama-extractor:8080", "qwen-chat": "http://llama-chat:8080"}'
+      LLMAPI_KEYS: "${LLMAPI_KEYS:?set LLMAPI_KEYS in .env (a JSON list: see .env.example)}"
+      LLMAPI_ADMIN_TOKEN: "${LLMAPI_ADMIN_TOKEN:?set LLMAPI_ADMIN_TOKEN in .env}"
+      LLMAPI_ASK_MODEL: qwen-chat
+      LLMAPI_MIN_SCORE: "${LLMAPI_MIN_SCORE:-0}"
+      LLMAPI_ABSTAIN_WITHOUT_SOURCES: "${LLMAPI_ABSTAIN:-0}"
+      LLMAPI_MAX_INFLIGHT: "8"
+      LLMAPI_MAX_QUEUE: "16"
+    ports: ["127.0.0.1:${API_PORT:-8000}:8000"]
+    depends_on:
+      llama-extractor: {condition: service_healthy}
+      llama-chat: {condition: service_healthy}
+    restart: unless-stopped
