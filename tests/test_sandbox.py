@@ -132,6 +132,10 @@ def test_environment_variables_are_not_inherited(monkeypatch):
     r = SB.run("import os; print(sorted(os.environ))")
     assert "SUPER_SECRET_API_KEY" not in r.stdout and "sk-test-123" not in r.stdout
     assert "PATH" in r.stdout and "HOME" in r.stdout
+    exact = SB.run("import os; print(os.environ['PATH'])")
+    assert exact.stdout.strip() == "/usr/bin:/bin", (
+        "a minimal PATH, not yours (which may contain secrets-bearing tool dirs)"
+    )
 
 
 def test_many_sandboxes_in_parallel_threads_do_not_interfere():

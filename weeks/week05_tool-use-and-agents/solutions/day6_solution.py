@@ -222,7 +222,8 @@ def run_task(
     log: list[SandboxResult] = []
     reg = ToolRegistry([describe_data, make_run_python(sandbox or make_sandbox(), log=log)])
     run = run_agent(task.prompt, reg, system=SYSTEM, provider=provider, max_steps=max_steps)
-    return run, bool(run.ok and task.check(run.answer)), log
+    # a correct-looking answer only counts if code actually ran successfully: a lucky guess is not an analysis
+    return run, bool(run.ok and any(r.ok for r in log) and task.check(run.answer)), log
 
 
 # ----------------------------------------------------------------------------- the escape matrix

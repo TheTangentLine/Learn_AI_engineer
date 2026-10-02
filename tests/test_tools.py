@@ -279,3 +279,82 @@ def test_remote_tools_get_truncation_and_timeouts_too():
     slow = ToolRegistry([_remote(lambda a: time.sleep(2), timeout_s=0.05)])
     r = slow.execute(ToolCall("1", "remote", {}))
     assert r.is_error and "timed out after 0.05s" in r.content
+
+
+# ----------------------------------------------------------------------------- compact specs and subsets (cost levers)
+
+
+def test_compact_specs_keep_names_types_and_required_but_drop_prose():
+    reg = ToolRegistry([multiply, convert]).compact()
+    full = ToolRegistry([multiply, convert]).specs()
+    short = reg.specs()
+    assert [s["name"] for s in short] == [s["name"] for s in full]
+    m = short[0]
+    assert m["description"] == "Multiply two numbers."
+    assert m["parameters"]["required"] == ["a"] and m["parameters"]["properties"]["a"] == {
+        "type": "number"
+    }
+    assert m["parameters"]["properties"]["b"] == {"type": "number", "default": 2.0}
+    assert "description" not in str(short[0]["parameters"]) and "First factor" not in str(short)
+    assert len(str(short)) < len(str(full))
+
+
+def test_compact_keeps_only_the_first_sentence_of_a_long_description():
+    @tool
+    def lookup(invoice_id: str) -> str:
+        """Look up an invoice by id (like INV-1234): returns its amount and status. Use it before refunding.
+
+        Args:
+            invoice_id: The invoice id.
+        """
+        return invoice_id
+
+    assert (
+        lookup.spec(compact=True)["description"]
+        == "Look up an invoice by id (like INV-1234): returns its amount and status."
+    )
+    assert lookup.spec()["description"].endswith("Use it before refunding.")
+
+
+def test_compact_does_not_strip_a_parameter_that_is_called_description():
+    @tool
+    def note(description: str) -> str:
+        """Save a note.
+
+        Args:
+            description: The text of the note.
+        """
+        return description
+
+    props = note.spec(compact=True)["parameters"]["properties"]
+    assert props == {"description": {"type": "string"}}
+
+
+def test_compact_is_a_new_registry_and_the_original_is_unchanged():
+    reg = ToolRegistry([multiply])
+    short = reg.compact()
+    assert (
+        short is not reg
+        and "First factor" in str(reg.specs())
+        and "First factor" not in str(short.specs())
+    )
+    assert short.execute(call("multiply", {"a": 3})).content == "6.0", (
+        "compact changes the spec, not the behaviour"
+    )
+
+
+def test_without_removes_tools_and_unknown_names_are_ignored():
+    reg = ToolRegistry([multiply, convert])
+    sub = reg.without("multiply", "nonexistent")
+    assert sub.names() == ["convert_temp"] and reg.names() == ["multiply", "convert_temp"]
+    gone = sub.execute(call("multiply", {"a": 1}))
+    assert gone.is_error and "Unknown tool" in gone.content
+    assert reg.compact().without("multiply").specs()[0]["description"] == "Convert a temperature."
+
+    @tool
+    def long_winded() -> str:
+        """Say hello. Then say it again, politely, and mention the weather."""
+        return "hi"
+
+    kept = ToolRegistry([long_winded, multiply]).compact().without("multiply")
+    assert kept.specs()[0]["description"] == "Say hello.", "without() keeps the compact setting"

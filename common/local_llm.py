@@ -103,24 +103,37 @@ class LocalChat:
         tools: list[dict] | None = None,
         system: str | None = None,
         max_new_tokens: int = 300,
+        prefill: str = "",
     ) -> str:
         """Multi-turn generation with the model's chat template (tool schemas included). Returns raw text,
-        keeping markers like <tool_call>...</tool_call> so callers can parse tool requests. Cached by input."""
-        payload = json.dumps(
-            [self.model_name, system, messages, tools, max_new_tokens], sort_keys=True, default=str
+        keeping markers like <tool_call>...</tool_call> so callers can parse tool requests. Cached by input.
+
+        ``prefill`` starts the assistant's reply with those characters (the returned text includes them): the local
+        way to FORCE a tool call, e.g. prefill='<tool_call>\\n{"name": "', the model can only continue it."""
+        key_parts = [self.model_name, system, messages, tools, max_new_tokens] + (
+            [prefill] if prefill else []
         )
+        payload = json.dumps(key_parts, sort_keys=True, default=str)
         key = hashlib.sha1(payload.encode()).hexdigest()
         if key in self.cache:
             return self.cache[key]
         self._load()
         msgs = ([{"role": "system", "content": system}] if system else []) + messages
-        ids = self._tok.apply_chat_template(
-            msgs,
-            tools=tools or None,
-            add_generation_prompt=True,
-            return_tensors="pt",
-            return_dict=True,
-        )
+        if (
+            prefill
+        ):  # render the prompt as text, append the forced start of the reply, then tokenise
+            prompt = self._tok.apply_chat_template(
+                msgs, tools=tools or None, add_generation_prompt=True, tokenize=False
+            )
+            ids = self._tok(prompt + prefill, return_tensors="pt", add_special_tokens=False)
+        else:
+            ids = self._tok.apply_chat_template(
+                msgs,
+                tools=tools or None,
+                add_generation_prompt=True,
+                return_tensors="pt",
+                return_dict=True,
+            )
         with self._torch.no_grad():
             out = self._model.generate(
                 **ids,
@@ -128,7 +141,9 @@ class LocalChat:
                 do_sample=False,
                 pad_token_id=self._tok.eos_token_id,
             )
-        text = self._tok.decode(out[0][ids["input_ids"].shape[1] :], skip_special_tokens=False)
+        text = prefill + self._tok.decode(
+            out[0][ids["input_ids"].shape[1] :], skip_special_tokens=False
+        )
         text = text.replace("<|im_end|>", "").replace("<|endoftext|>", "").strip()
         self.generated += 1
         self.cache[key] = text

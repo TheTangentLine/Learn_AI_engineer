@@ -298,3 +298,16 @@ def test_escape_matrix_in_docker_blocks_everything():
 def test_every_attempt_is_classified_and_the_dangerous_ones_never_run_on_the_host():
     assert [a.name for a in d6.ATTEMPTS if not a.host_safe] == ["fork bomb", "allocate 600 MB"]
     assert len({a.name for a in d6.ATTEMPTS}) == len(d6.ATTEMPTS) == 9
+
+
+def test_a_correct_answer_without_running_any_code_is_a_guess_not_a_pass():
+    task = d6.TASKS[3]  # missing units
+    with fake_llm([(r"(?s).*", "6 rows have missing units.")]):
+        run, passed, log = d6.run_task(task, provider="anthropic", sandbox=SB)
+    assert run.ok and task.check(run.answer) and log == [] and not passed
+    failing = tool_calls(("run_python", {"code": "raise ValueError('x')"}))
+    with fake_llm([(r"(?s).*", [failing, "6 rows have missing units."])]):
+        run, passed, log = d6.run_task(task, provider="anthropic", sandbox=SB)
+    assert task.check(run.answer) and not any(r.ok for r in log) and not passed, (
+        "only failing runs: still a guess"
+    )

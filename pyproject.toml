@@ -38,6 +38,20 @@ rag = [
     "networkx>=3.4",
     "scipy>=1.15",
 ]
+# Agents (Week 5): MCP SDK (2.x installs as `mcp`; pin <2 for the old FastMCP API) and pandas for the analysis agent
+agents = [
+    "mcp>=2",
+    "pandas>=3",
+    # Week 6 frameworks (versions used while writing: langgraph 1.2, openai-agents 0.22, pydantic-ai 2.52)
+    "langgraph>=1.2",
+    "langgraph-checkpoint-sqlite>=3",
+    "openai-agents>=0.22",
+    "pydantic-ai-slim[openai]>=2.5",
+    "claude-agent-sdk>=0.2",
+    # Week 7 tracing (versions used while writing: opentelemetry 1.45; already installed as a dependency of the above)
+    "opentelemetry-sdk>=1.30",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.30",
+]
 # DSPy (Week 2 Day 6). Its litellm dependency pins openai<3; pip warns but it coexists - or use a separate venv.
 dspy = ["dspy>=3.4"]
 

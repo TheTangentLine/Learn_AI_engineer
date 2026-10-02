@@ -305,3 +305,69 @@ def test_budget_limits_trip_exactly_when_crossed_not_later():
     )
     assert len(turns(max_total_tokens=one_step_tokens - 1).steps) == 1
     assert len(turns(max_total_tokens=one_step_tokens + 1).steps) > 1
+
+
+def test_first_tool_choice_applies_to_step_one_only():
+    with fake_llm(seq(tool_calls(("add", {"a": 1, "b": 1})), "two")) as f:
+        run = run_agent("1+1?", REG, provider="anthropic", first_tool_choice="add", max_steps=4)
+    assert run.ok and [c.kwargs.get("tool_choice") for c in f.calls] == ["add", None]
+    with fake_llm(seq("direct")) as f:
+        run_agent("hi", REG, provider="anthropic", max_steps=1, first_tool_choice="add")
+    assert f.calls[0].kwargs["tool_choice"] == "none", (
+        "the last (here: only) step always hides the tools, whatever was requested"
+    )
+
+
+# ----------------------------------------------------------------------------- stop_when: a deterministic last step
+
+
+def test_stop_when_ends_the_run_without_another_model_call():
+    CALLS.clear()
+    with fake_llm(seq(tool_calls(("add", {"a": 2, "b": 3})), "SHOULD NOT BE ASKED")) as f:
+        run = run_agent(
+            "2+3?",
+            REG,
+            provider="anthropic",
+            stop_when=lambda run, step: f"It is {step.results[0].content}.",
+        )
+    assert run.ok and run.answer == "It is 5." and len(f.calls) == 1 and len(run.steps) == 1
+    assert [m["role"] for m in run.messages] == ["user", "assistant", "tool", "assistant"]
+    assert run.messages[-1] == {"role": "assistant", "content": "It is 5."}
+    assert run.transcript[-1] == run.messages[-1] and run.tool_names == ["add"]
+
+
+def test_stop_when_returning_none_continues_the_loop_and_sees_every_step():
+    seen = []
+
+    def stop(run, step):
+        seen.append((step.index, [r.content for r in step.results]))
+        return None
+
+    with fake_llm(
+        seq(tool_calls(("add", {"a": 1, "b": 1})), tool_calls(("add", {"a": 2, "b": 2})), "done")
+    ) as f:
+        run = run_agent("x", REG, provider="anthropic", stop_when=stop)
+    assert run.answer == "done" and len(f.calls) == 3
+    assert seen == [(1, ["2"]), (2, ["4"])], (
+        "called after each tool step, never after the final answer"
+    )
+
+
+def test_stop_when_can_decide_on_a_later_step_and_may_look_at_tool_errors():
+    def stop(run, step):
+        return "gave up" if any(r.is_error for r in step.results) else None
+
+    with fake_llm(
+        seq(tool_calls(("add", {"a": 1, "b": 1})), tool_calls(("boom", {})), "unused")
+    ) as f:
+        run = run_agent("x", REG, provider="anthropic", stop_when=stop)
+    assert run.answer == "gave up" and run.ok and len(f.calls) == 2 and run.errors == 1
+
+
+def test_stop_when_is_not_consulted_when_the_model_answers_directly():
+    called = []
+    with fake_llm(seq("just text")):
+        run = run_agent(
+            "x", REG, provider="anthropic", stop_when=lambda r, s: called.append(1) or "NO"
+        )
+    assert run.answer == "just text" and called == []

@@ -1,0 +1,55 @@
+# Copy to .github/workflows/llmops.yml. NOT RUN by the author (no GitHub runner here); every command inside is run locally by the
+# tests (scripted provider) and by the lesson (local model). Compare with ci/evals.yml.example (Day 3): this one gates cost and latency too.
+name: llmops-gate
+
+on:
+  pull_request:            # NOT pull_request_target: a fork's code must never run with this repo's secrets
+    paths: ["common/**", "weeks/**/support_system/**", "weeks/**/llmops/**", "evals/**"]
+  schedule:
+    - cron: "17 3 * * *"   # nightly: the same suite on the default branch, so a slow regression cannot hide behind small PRs
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: llmops-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -e ".[agents]" pytest ruff
+      - run: ruff check .
+      - run: pytest -q tests weeks/week07_evals-observability-llmops/solutions   # offline: scripted models, drills, gate logic
+
+  gate:
+    needs: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name != 'pull_request'
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    defaults:
+      run:
+        working-directory: weeks/week07_evals-observability-llmops/solutions/weekly
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -e "../../../../.[agents]"
+      - name: Run the suite on the candidate (spend-capped)
+        run: python -m llmops run --variant lean+hide+direct --provider anthropic --trials 3 --budget 2.00 --name candidate --out /tmp/runs/candidate
+      - name: Gate against the stored baseline (quality, cost, latency, dataset, completeness)
+        run: python -m llmops gate --baseline ../../../../evals/baseline --candidate /tmp/runs/candidate --summary-file "$GITHUB_STEP_SUMMARY"
+      - name: Dashboard
+        if: always()
+        run: python -m llmops dashboard --runs ../../../../evals/baseline /tmp/runs/candidate --baseline baseline --out /tmp/runs/dashboard.html
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: llmops-results, path: /tmp/runs/ }

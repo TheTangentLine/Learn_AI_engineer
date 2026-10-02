@@ -11,10 +11,13 @@ its actions, tool results are the observations. What makes it an *agent* is only
 next step; what makes it *safe to run* is everything below (each point has a test):
 
   * a step budget; the LAST step hides the tools, so the model must answer with what it has
+  * ``first_tool_choice="required"`` forces a tool call on step 1 only (models that skip verification and just talk)
   * a cost budget and a token budget, checked after every step
   * repeated identical calls are blocked (the result is replaced by a message that says so); two fully
     blocked steps in a row end the run as "stuck" instead of burning the budget
   * every tool call is answered, errors included, in order, and parallel calls run concurrently
+  * a ``stop_when(run, step)`` hook may return a final answer built from the tool results, ending the run without
+    another model call (a deterministic last step: cheaper and faster, but the template must be good enough)
   * a ``context_hook`` can rewrite the message list before each model call (Day 5: compaction)
   * a full trace: what the model said, what it called, what came back, tokens, cost, latency
 """
@@ -27,7 +30,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import chat
+from . import chat, tracing
 from .chat import ToolCall
 from .llm import Usage
 from .tools import ToolRegistry, ToolResult
@@ -132,7 +135,7 @@ def _key(call: ToolCall) -> str:
     return call.name + json.dumps(call.args, sort_keys=True, default=str)
 
 
-def run_agent(
+def _run_agent(
     task: str,
     registry: ToolRegistry,
     *,
@@ -144,9 +147,11 @@ def run_agent(
     max_cost_usd: float | None = None,
     max_total_tokens: int | None = None,
     repeat_limit: int = 2,
+    first_tool_choice: str | None = None,
     turn_max_tokens: int = 2048,
     context_hook: Callable[[list[dict], AgentRun], list[dict]] | None = None,
     on_step: Callable[[Step], None] | None = None,
+    stop_when: Callable[[AgentRun, Step], str | None] | None = None,
     **turn_kwargs: Any,
 ) -> AgentRun:
     """Run until the model answers or a limit trips. Never raises for model/tool/provider failures."""
@@ -169,7 +174,7 @@ def run_agent(
                 provider=provider,
                 model=model,
                 max_tokens=turn_max_tokens,
-                tool_choice="none" if last else None,
+                tool_choice="none" if last else (first_tool_choice if index == 1 else None),
                 **turn_kwargs,
             )
         except Exception as exc:  # provider outage, auth, rate limit after retries ...
@@ -232,6 +237,13 @@ def run_agent(
             run.transcript.append(run.messages[-1])
         if on_step:
             on_step(step)
+        if stop_when is not None and (final := stop_when(run, step)) is not None:
+            # the tool results are already a finished answer: skip the last model call (a whole round trip and the
+            # whole history re-sent). The caller owns the quality of what it returns.
+            run.answer, run.status = final, "done"
+            run.messages.append({"role": "assistant", "content": final})
+            run.transcript.append(run.messages[-1])
+            break
 
         blocked_in_a_row = blocked_in_a_row + 1 if step.blocked == len(step.calls) else 0
         if blocked_in_a_row >= 2:
@@ -249,3 +261,22 @@ def run_agent(
 
     run.seconds = time.perf_counter() - t_start
     return run
+
+
+def run_agent(
+    task: str, registry: ToolRegistry, *, agent_name: str = "agent", **kwargs: Any
+) -> AgentRun:
+    """Run the loop (see the module docstring and ``_run_agent`` for the options) inside an ``invoke_agent`` span.
+
+    Without a tracer provider this adds nothing. With one, the span carries the agent name, how it ended, steps and
+    cost, and is the parent of every model and tool span below it. A run that did not finish normally is an ERROR
+    span (only its status word is recorded: the model's text and any error message may contain user data)."""
+    attrs = {tracing.OPERATION: "invoke_agent", tracing.AGENT_NAME: agent_name}
+    with tracing.span(f"invoke_agent {agent_name}", attrs, kind="client") as sp:
+        run = _run_agent(task, registry, **kwargs)
+        sp.set_attribute(tracing.AGENT_STATUS, run.status)
+        sp.set_attribute(tracing.STEPS, len(run.steps))
+        sp.set_attribute(tracing.COST, run.cost_usd)
+        if not run.ok:
+            tracing.set_error(sp, "agent_" + run.status)
+        return run

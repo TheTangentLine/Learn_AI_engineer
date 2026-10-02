@@ -223,19 +223,41 @@ def _openai_choice(choice: str | None) -> str | dict | None:
 
 # ----------------------------------------------------------------------------- response parsers
 
-_TOOL_CALL = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.S)
+_TOOL_OPEN = re.compile(r"<tool_call>\s*")
+_TOOL_CLOSE = re.compile(r"\s*</tool_call>")
 
 
 def parse_local_output(text: str) -> tuple[str, list[ToolCall]]:
+    """Qwen-style ``<tool_call>{json}</tool_call>`` blocks. Tolerant: a block whose closing tag is missing (common when a
+    call is forced with a prefill, or the model stops early) is still read, because the JSON object is decoded directly."""
     calls: list[ToolCall] = []
-    for i, m in enumerate(_TOOL_CALL.finditer(text)):
+    plain, pos = [], 0
+    decoder = json.JSONDecoder()
+    for m in _TOOL_OPEN.finditer(text):
+        if m.start() < pos:
+            continue  # inside a block we already consumed
+        plain.append(text[pos : m.start()])
         try:
-            obj = json.loads(m.group(1))
-            calls.append(ToolCall(f"call_{i}", obj["name"], obj.get("arguments", {})))
-        except (json.JSONDecodeError, KeyError, TypeError):
-            continue  # a malformed call is dropped (the model gets no result for it)
-    plain = _TOOL_CALL.sub("", text).replace("<|im_end|>", "").strip()
-    return plain, calls
+            obj, end = decoder.raw_decode(text, m.end())
+            calls.append(ToolCall(f"call_{len(calls)}", obj["name"], obj.get("arguments", {})))
+            close = _TOOL_CLOSE.match(text, end)
+            pos = close.end() if close else end
+        except (json.JSONDecodeError, KeyError, TypeError, AttributeError):
+            close = _TOOL_CLOSE.search(
+                text, m.end()
+            )  # a malformed call is dropped (the model gets no result for it)
+            pos = close.end() if close else len(text)
+    plain.append(text[pos:])
+    return "".join(plain).replace("<|im_end|>", "").strip(), calls
+
+
+def forced_prefill(tool_choice: str | None, tools: list[dict]) -> str:
+    """The reply start that forces a tool call from a model that has no tool_choice switch."""
+    if tool_choice in (None, "auto", "none") or not tools:
+        return ""
+    if tool_choice in ("required", "any"):
+        return '<tool_call>\n{"name": "'
+    return f'<tool_call>\n{{"name": {json.dumps(tool_choice)}, "arguments": '
 
 
 def _safe_json(s: str | dict | None) -> dict:
@@ -348,6 +370,11 @@ def turn(
             ]
             if tool_choice in ("any", "required", "none"):
                 kw["tool_choice"] = "required" if tool_choice in ("any", "required") else "none"
+            elif tool_choice not in (
+                None,
+                "auto",
+            ):  # a specific tool, in the Chat Completions shape
+                kw["tool_choice"] = {"type": "function", "function": {"name": tool_choice}}
         r = llm._ollama().chat.completions.create(**kw)
         msg = r.choices[0].message
         text = msg.content or ""
@@ -369,7 +396,13 @@ def turn(
         # tool_choice="none": show the model no tools at all (the local template has no such switch)
         specs = [] if tool_choice == "none" else [_as_openai_tool(t) for t in tools]
         local_msgs = to_local(messages)
-        raw_text = chat_model.chat(local_msgs, specs, system, max_new_tokens=min(max_tokens, 400))
+        raw_text = chat_model.chat(
+            local_msgs,
+            specs,
+            system,
+            max_new_tokens=min(max_tokens, 400),
+            prefill=forced_prefill(tool_choice, specs),
+        )
         text, calls = parse_local_output(raw_text)
         usage = Usage(
             chat_model.count_tokens(local_msgs, specs, system), chat_model.text_tokens(raw_text)

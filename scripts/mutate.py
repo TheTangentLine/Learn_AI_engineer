@@ -16,7 +16,8 @@ import sys
 import tempfile
 from pathlib import Path
 
-TIMEOUT = 45
+TIMEOUT = int(os.environ.get("MUTATE_TIMEOUT", "45"))  # seconds per mutant; slow suites need more
+SELECT = os.environ.get("MUTATE_K", "")  # optional pytest -k expression: run only the tests that cover the file
 
 
 def main() -> int:
@@ -36,7 +37,8 @@ def main() -> int:
                 # otherwise share a stale .pyc (mtime has 1s resolution) and give a false KILLED/SURVIVED
                 with tempfile.TemporaryDirectory() as pycache:
                     env = {**os.environ, "PYTHONPYCACHEPREFIX": pycache}
-                    r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider", tests],
+                    cmd = [sys.executable, "-m", "pytest", "-q", "-x", "-p", "no:cacheprovider", tests] + (["-k", SELECT] if SELECT else [])
+                    r = subprocess.run(cmd,
                                        capture_output=True, text=True, timeout=TIMEOUT, env=env)
                 status = "KILLED" if r.returncode != 0 else "SURVIVED"
             except subprocess.TimeoutExpired:

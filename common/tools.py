@@ -24,6 +24,7 @@ slow tools time out; unknown tools and invalid arguments are errors, not excepti
 
 from __future__ import annotations
 
+import contextvars
 import inspect
 import json
 import re
@@ -83,8 +84,18 @@ class Tool:
         None  # remote tools: takes the raw argument dict
     )
 
-    def spec(self) -> dict[str, Any]:
-        return {"name": self.name, "description": self.description, "parameters": self.parameters}
+    def spec(self, compact: bool = False) -> dict[str, Any]:
+        if not compact:
+            return {
+                "name": self.name,
+                "description": self.description,
+                "parameters": self.parameters,
+            }
+        return {
+            "name": self.name,
+            "description": _first_sentence(self.description),
+            "parameters": _strip_descriptions(self.parameters),
+        }
 
 
 def tool(
@@ -124,6 +135,26 @@ def tool(
     return build(fn) if fn else build
 
 
+def _first_sentence(text: str) -> str:
+    """The description's first sentence: the part that says WHAT the tool does (the rest is usually usage advice)."""
+    m = re.match(r"(.+?[.!?])(\s|$)", text.strip(), re.S)
+    return (m.group(1) if m else text).strip()
+
+
+def _strip_descriptions(node: Any) -> Any:
+    """Drop the per-parameter ``description`` strings from a JSON schema (names, types and constraints stay). A
+    parameter that is itself NAMED "description" survives: its value is a schema (a dict), not a string."""
+    if isinstance(node, dict):
+        return {
+            k: _strip_descriptions(v)
+            for k, v in node.items()
+            if not (k == "description" and isinstance(v, str))
+        }
+    if isinstance(node, list):
+        return [_strip_descriptions(x) for x in node]
+    return node
+
+
 @dataclass
 class ToolResult:
     call_id: str
@@ -154,10 +185,20 @@ def _stringify(value: Any, limit: int) -> str:
 
 
 class ToolRegistry:
-    def __init__(self, tools: list[Tool] | None = None):
+    def __init__(self, tools: list[Tool] | None = None, *, compact: bool = False):
         self._tools: dict[str, Tool] = {}
+        self._compact = compact
         for t in tools or []:
             self.add(t)
+
+    def compact(self) -> ToolRegistry:
+        """The same tools with SHORT specs (first sentence of each description, no per-parameter text): fewer input
+        tokens on every model call, at the risk of a weaker model misusing the tools. Measure before adopting."""
+        return ToolRegistry(self.tools(), compact=True)
+
+    def without(self, *names: str) -> ToolRegistry:
+        """The same tools minus some: what the model is not offered it cannot call (or repeat)."""
+        return ToolRegistry([t for t in self.tools() if t.name not in names], compact=self._compact)
 
     def add(self, t: Tool) -> None:
         if t.name in self._tools:
@@ -165,10 +206,13 @@ class ToolRegistry:
         self._tools[t.name] = t
 
     def specs(self) -> list[dict[str, Any]]:
-        return [t.spec() for t in self._tools.values()]
+        return [t.spec(self._compact) for t in self._tools.values()]
 
     def names(self) -> list[str]:
         return list(self._tools)
+
+    def tools(self) -> list[Tool]:
+        return list(self._tools.values())
 
     def execute(self, call: ToolCall) -> ToolResult:
         t0 = time.perf_counter()
@@ -198,7 +242,9 @@ class ToolRegistry:
         # a worker thread lets us enforce a timeout; a timed-out tool keeps running in the background,
         # so truly untrusted work belongs in a subprocess/container (Day 6)
         ex = ThreadPoolExecutor(max_workers=1)
-        fut = ex.submit(run_tool)
+        fut = ex.submit(
+            contextvars.copy_context().run, run_tool
+        )  # keep the caller's context (tracing, request ids)
         try:
             out = fut.result(timeout=t.timeout_s)
             res = ToolResult(
@@ -233,4 +279,7 @@ class ToolRegistry:
         if not parallel or len(calls) <= 1:
             return [self.execute(c) for c in calls]
         with ThreadPoolExecutor(max_workers=min(max_workers, len(calls))) as pool:
-            return list(pool.map(self.execute, calls))
+            # one COPY of the caller's context per call (a Context cannot be entered by two threads at once):
+            # without it, anything keyed on context (trace parents, request ids) is lost in the worker threads
+            ctxs = [contextvars.copy_context() for _ in calls]
+            return list(pool.map(lambda ctx, c: ctx.run(self.execute, c), ctxs, calls))

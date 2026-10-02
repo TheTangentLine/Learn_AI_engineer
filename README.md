@@ -15,16 +15,16 @@ A hands-on path from "I can call an API" to "I can design, evaluate, secure, fin
 | | [2](weeks/week02_prompting-and-structured-outputs/) | Prompting & structured outputs, workflows, memory, DSPy | Document-extraction pipeline |
 | **2 · Retrieval** | [3](weeks/week03_embeddings-and-rag/) | Embeddings, vector search, chunking, RAG, hybrid search | Docs Q&A bot |
 | | [4](weeks/week04_advanced-rag-and-evaluation/) | Advanced RAG & retrieval evaluation | Before/after eval report |
-| **3 · Agents** | 5 | Tool use, agent loop, MCP, context engineering, sandboxes | Research agent |
-| | 6 | Frameworks & multi-agent systems, human-in-the-loop | Customer-support multi-agent system |
-| **4 · Production quality** | 7 | Evals, tracing, CI gates, cost & latency | Production harness for Week 6 |
+| **3 · Agents** | [5](weeks/week05_tool-use-and-agents/) | Tool use, agent loop, tool design, MCP, context engineering, sandboxes | Research agent with verified citations |
+| | [6](weeks/week06_frameworks-and-multi-agent/) | Frameworks & multi-agent systems, human-in-the-loop, agent evaluation | Customer-support multi-agent system |
+| **4 · Production quality** | [7](weeks/week07_evals-observability-llmops/) | Evals, LLM-as-judge, CI gates, tracing, cost & latency, A/B tests & drift | Production harness for Week 6 |
 | | 8 | Security: prompt injection, guardrails, privacy, red-teaming | Red-team & harden your agents |
 | **5 · Models** | 9 | Transformers from scratch (PyTorch) | Mini-GPT with KV cache |
 | | 10 | Fine-tuning: SFT, LoRA/QLoRA, DPO, merge & export | Small model beats prompted base |
 | | 11 | Inference & deployment: quantisation, vLLM, FastAPI, Docker | Deploy + load test |
 | **6 · Capstone** | 12 | A production AI product, end to end | Demo + portfolio README |
 
-> **Status:** Weeks 1–4 are written (lessons, solutions, tests); Weeks 5–12 are being added one at a time, each building on the previous weeks' artifacts. Run `./scripts/check.sh` to lint and run every offline test.
+> **Status:** Weeks 1–7 are written (lessons, solutions, tests); Weeks 8–12 are being added one at a time, each building on the previous weeks' artifacts. Run `./scripts/check.sh` to lint and run every offline test.
 
 ## Setup
 

@@ -72,3 +72,20 @@ def test_local_turns_report_token_usage_and_the_model_is_loaded_once(tools):
     assert chat._local_chat.cache_info().misses == 1, (
         "same model -> one LocalChat, not one per turn"
     )
+
+
+def test_a_forced_tool_call_happens_even_when_the_model_would_just_chat(tools):
+    msgs = [{"role": "user", "content": "Say hello in French."}]
+    forced = chat.turn(msgs, tools, provider="local", tool_choice="required")
+    assert forced.wants_tools and forced.tool_calls[0].name in {"multiply", "get_weather"}
+    named = chat.turn(
+        [{"role": "user", "content": "What is the weather in Paris?"}],
+        tools,
+        provider="local",
+        tool_choice="get_weather",
+    )
+    assert (
+        named.wants_tools
+        and named.tool_calls[0].name == "get_weather"
+        and isinstance(named.tool_calls[0].args, dict)
+    )

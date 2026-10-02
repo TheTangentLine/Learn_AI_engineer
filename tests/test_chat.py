@@ -269,3 +269,67 @@ def test_malformed_tool_arguments_do_not_crash_parsing(server):
         "[1,2]"
     ) == {"_value": [1, 2]}
     assert chat._safe_json(None) == {} and chat._safe_json({"a": 1}) == {"a": 1}
+
+
+def test_local_parser_reads_unclosed_blocks_extra_text_and_drops_garbage():
+    unclosed = '<tool_call>\n{"name": "get_weather", "arguments": {"city": "Tokyo"}}'
+    text, calls = chat.parse_local_output(unclosed)
+    assert text == "" and [(c.name, c.args) for c in calls] == [("get_weather", {"city": "Tokyo"})]
+    chatty = 'Sure thing! <tool_call>{"name": "f", "arguments": {"a": 1}} trailing words </tool_call> and then <tool_call>{"name": "g"}</tool_call> bye'
+    text, calls = chat.parse_local_output(chatty)
+    assert (
+        [(c.name, c.args) for c in calls] == [("f", {"a": 1}), ("g", {})]
+        and "trailing words" in text
+        and text.startswith("Sure thing!")
+        and text.endswith("bye")
+    )
+    assert [c.id for c in calls] == ["call_0", "call_1"]
+    nested = '<tool_call>{"name": "f", "arguments": {"o": {"k": [1, 2, "}"]}}}</tool_call>'
+    assert chat.parse_local_output(nested)[1][0].args == {"o": {"k": [1, 2, "}"]}}, (
+        "braces inside strings and nesting are handled"
+    )
+    text, calls = chat.parse_local_output("<tool_call>{broken</tool_call>after<tool_call>")
+    assert calls == [] and text == "after"
+    assert chat.parse_local_output('<tool_call>{"arguments": {}}</tool_call>x')[1] == [], (
+        "a call without a name is dropped"
+    )
+
+
+def test_forced_prefill_for_models_without_a_tool_choice_switch():
+    tools = [WEATHER]
+    assert (
+        chat.forced_prefill(None, tools)
+        == chat.forced_prefill("auto", tools)
+        == chat.forced_prefill("none", tools)
+        == ""
+    )
+    assert chat.forced_prefill("required", []) == "", "no tools, nothing to force"
+    assert (
+        chat.forced_prefill("required", tools)
+        == chat.forced_prefill("any", tools)
+        == '<tool_call>\n{"name": "'
+    )
+    assert (
+        chat.forced_prefill("get_weather", tools)
+        == '<tool_call>\n{"name": "get_weather", "arguments": '
+    )
+    text, calls = chat.parse_local_output(
+        chat.forced_prefill("get_weather", tools) + '{"city": "Paris"}}'
+    )
+    assert [(c.name, c.args) for c in calls] == [("get_weather", {"city": "Paris"})], (
+        "prefill + the model's continuation parses"
+    )
+
+
+def test_a_named_tool_choice_reaches_chat_completions_endpoints_in_their_own_shape(server):
+    server.script = [{"text": "a"}]
+    chat.turn(
+        [{"role": "user", "content": "x"}], [WEATHER], provider="ollama", tool_choice="get_weather"
+    )
+    assert server.requests[-1]["body"]["tool_choice"] == {
+        "type": "function",
+        "function": {"name": "get_weather"},
+    }
+    server.script = [{"text": "b"}]
+    chat.turn([{"role": "user", "content": "x"}], [WEATHER], provider="ollama", tool_choice="auto")
+    assert "tool_choice" not in server.requests[-1]["body"]

@@ -1,0 +1,55 @@
+# Copy to .github/workflows/evals.yml. NOT RUN by the author (no GitHub runner here); the commands inside ARE run locally by day3_solution.py.
+name: eval-gate
+
+on:
+  pull_request:            # NOT pull_request_target: a fork's code must never run with this repo's secrets
+    paths:
+      - "common/**"
+      - "weeks/**/support_system/**"
+      - "evals/**"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read           # least privilege; add pull-requests: write only if you post PR comments
+
+concurrency:
+  group: eval-gate-${{ github.ref }}
+  cancel-in-progress: true  # a new push supersedes the old run (evals cost money)
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -e ".[agents]" pytest ruff
+      - run: ruff check .
+      - run: pytest -q tests          # fast, offline, scripted models: logic regressions
+
+  eval:
+    needs: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 30       # a stuck model call must not burn the runner
+    # fork PRs get no secrets, so skip the live eval for them (the unit job still runs)
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      EVAL_BUDGET_USD: "2.00"  # the harness aborts past this
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -e ".[agents]"
+      - name: Run the eval suite on the candidate
+        run: python weeks/week07_evals-observability-llmops/solutions/day3_solution.py run --variant rules+prefetch --provider anthropic --out out/current.json
+      - name: Gate against the stored baseline
+        run: >
+          python weeks/week07_evals-observability-llmops/solutions/evalgate.py compare
+          --baseline evals/baseline.json --current out/current.json
+          --critical "billing-pressure-*,human-*" --max-drop 0.05
+          --summary-file "$GITHUB_STEP_SUMMARY"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with: { name: eval-results, path: out/ }
