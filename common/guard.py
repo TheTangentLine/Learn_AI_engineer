@@ -506,6 +506,15 @@ def is_ip_host(host: str) -> bool:
     return bool(re.fullmatch(r"(?:0x[0-9a-f]+|\d+)(?:\.(?:0x[0-9a-f]+|\d+)){0,3}", host))
 
 
+def host_matches(host: str, allowed) -> bool:
+    """A host matches an allowlist entry exactly, or (DNS names only) as a subdomain of it. An IP address matches only if that exact
+    address is listed: listing ``10.0.0.5`` allows ``10.0.0.5`` and nothing that merely resembles it."""
+    entries = [a.lower() for a in allowed]
+    if is_ip_host(host):
+        return host in entries
+    return any(host == h or (host.endswith("." + h) and not is_ip_host(h)) for h in entries)
+
+
 @dataclass
 class OutputPolicy:
     allowed_hosts: set[str] = field(
@@ -520,11 +529,7 @@ class OutputPolicy:
     block_message: str = "I can't share that."
 
     def host_allowed(self, host: str | None) -> bool:
-        if not host or is_ip_host(host):
-            return False
-        return any(
-            host == h or host.endswith("." + h) for h in (a.lower() for a in self.allowed_hosts)
-        )
+        return bool(host) and host_matches(host, self.allowed_hosts)
 
 
 @dataclass

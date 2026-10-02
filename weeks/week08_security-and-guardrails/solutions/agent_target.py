@@ -250,12 +250,7 @@ class AgentHarness:
                 note_mode = "confirm" if h.confirm_notes else "allow"
                 rules = [
                     P.ToolRule("search_web", taint_sensitive=h.taint),
-                    P.ToolRule(
-                        "fetch_page",
-                        args=(P.ArgRule("url", "host_allow", {web.host.split(":")[0]}),)
-                        if False
-                        else (),
-                    ),
+                    P.ToolRule("fetch_page"),
                     *[
                         P.ToolRule(
                             n,

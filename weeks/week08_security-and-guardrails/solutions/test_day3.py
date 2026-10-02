@@ -332,3 +332,34 @@ def test_the_table_prints_one_row_per_configuration():
     assert (
         text.count("\n") == len(D.CONFIGS) + 1 and "all layers" in text and "benign refused" in text
     )
+
+
+# ----------------------------------------------------------------------------- the real model
+
+CACHE = Path(__file__).resolve().parents[3] / "outputs" / "local_llm_cache.json"
+QWEN = {  # (lab successes of 96, held-out successes of 60, golden correct of 12, benign refused of 42)
+    "none": (13, 3, 11, 0),
+    "input guard": (3, 0, 11, 1),
+    "doc filter (sentences)": (10, 3, 11, 0),
+    "doc filter (chunks)": (10, 3, 11, 0),
+    "spotlight: delimit": (13, 3, 11, 0),
+    "spotlight: datamark": (4, 5, 9, 0),
+    "isolate secret": (11, 4, 11, 0),
+    "output guard": (12, 3, 11, 0),
+    "structural (isolate + output)": (11, 4, 11, 0),
+    "all layers": (0, 0, 9, 1),
+}
+
+
+@pytest.mark.skipif(
+    not CACHE.exists(), reason="no local model cache (run day3_solution.py qwen once)"
+)
+@pytest.mark.parametrize("name", list(QWEN))
+def test_the_real_qwen_numbers_the_lesson_quotes(name):
+    r = d3.evaluate(T.qwen_model(), D.CONFIGS[name])
+    assert (
+        r["lab"]["succeeded"],
+        r["heldout"]["succeeded"],
+        r["golden"]["correct"],
+        r["benign_refused"],
+    ) == QWEN[name]

@@ -88,7 +88,8 @@ class SupportSystem:
     def __init__(self, db_path: str | Path, *, provider: str | None = None, model: str | None = None, clock=time.time, kb: KnowledgeBase | None = None,
                  guards: bool = True, max_steps: int = 6, max_cost_usd: float | None = None, drafter=None,
                  force_first_tool: str = "", triage_few_shot: bool = False, triage_mode: str = "llm", prefetch_invoice: bool = False,
-                 lean: bool = False, hide_prefetched: bool = False, reply_from_tool: bool = False, cache: ResponseCache | None = None):  # fmt: skip
+                 lean: bool = False, hide_prefetched: bool = False, reply_from_tool: bool = False, cache: ResponseCache | None = None,
+                 tool_wrapper=None, reply_filter=None):  # fmt: skip
         self.provider, self.model, self.guards, self.max_steps, self.max_cost_usd = (
             provider,
             model,
@@ -109,6 +110,9 @@ class SupportSystem:
             reply_from_tool,
             cache,
         )
+        # security hooks (Week 8), both off by default: tool_wrapper(tools, conversation_id, agent) -> tools wraps every specialist's tools
+        # (authorisation, argument rules); reply_filter(text) -> text sanitises the reply before the customer's client renders it
+        self.tool_wrapper, self.reply_filter = tool_wrapper, reply_filter
         self.store = Store(db_path, clock=clock)
         self.refunds = d5.RefundService(db_path, clock=clock, drafter=drafter)
         self.kb = kb or KnowledgeBase()
@@ -205,6 +209,8 @@ class SupportSystem:
                 )
                 return Reply(notice + hit.value, agent, "ok", [], 0, spent, [], cached=True)
         tools = (billing_tools if agent == "billing" else tech_tools)(self, conversation_id)
+        if self.tool_wrapper is not None:
+            tools = self.tool_wrapper(tools, conversation_id, agent)
         if self.lean:
             tools = tools.compact()
         prefetched: list[dict] = []
@@ -250,6 +256,11 @@ class SupportSystem:
         guarded = check_reply(run.answer, results) if self.guards else None
         text = guarded.reply if guarded else run.answer
         violations = guarded.violations if guarded else []
+        if self.reply_filter is not None:
+            filtered = self.reply_filter(text)
+            if filtered != text:
+                violations = [*violations, "reply_filtered"]
+                text = filtered
         for v in violations:
             self.store.log(conversation_id, "violation", violation=v, original=run.answer)
         if (

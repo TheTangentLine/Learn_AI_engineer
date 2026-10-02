@@ -37,12 +37,7 @@ from .tools import ToolRegistry, ToolResult
 URL_IN_TEXT = re.compile(r"(?:https?:)?//[^\s<>()\[\]\"'`]+", re.I)
 
 
-def _host_matches(host: str, allowed: Iterable[str]) -> bool:
-    """A host matches an allowlist entry exactly, or (for DNS names only) as a subdomain of it. An IP address matches only if that exact
-    address is listed: ``10.0.0.5`` listed allows ``10.0.0.5``, never a subdomain trick and never a neighbouring address."""
-    if guard.is_ip_host(host):
-        return host in set(allowed)
-    return any(host == h or host.endswith("." + h) for h in allowed)
+_host_matches = guard.host_matches
 
 
 # ----------------------------------------------------------------------------- taint tracking
@@ -231,7 +226,12 @@ class PolicyEngine:
                     "this action needs human confirmation and none is available",
                     dig,
                 )
-            ok = bool(self.confirmer(call))
+            try:
+                ok = bool(self.confirmer(call))
+            except Exception:  # noqa: BLE001 - a confirmer that crashes or times out is not an approval
+                return Decision(
+                    call.name, "confirm-denied", "the confirmation could not be obtained", dig
+                )
             return Decision(
                 call.name,
                 "confirm-approved" if ok else "confirm-denied",

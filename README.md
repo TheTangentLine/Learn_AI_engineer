@@ -18,13 +18,13 @@ A hands-on path from "I can call an API" to "I can design, evaluate, secure, fin
 | **3 · Agents** | [5](weeks/week05_tool-use-and-agents/) | Tool use, agent loop, tool design, MCP, context engineering, sandboxes | Research agent with verified citations |
 | | [6](weeks/week06_frameworks-and-multi-agent/) | Frameworks & multi-agent systems, human-in-the-loop, agent evaluation | Customer-support multi-agent system |
 | **4 · Production quality** | [7](weeks/week07_evals-observability-llmops/) | Evals, LLM-as-judge, CI gates, tracing, cost & latency, A/B tests & drift | Production harness for Week 6 |
-| | 8 | Security: prompt injection, guardrails, privacy, red-teaming | Red-team & harden your agents |
-| **5 · Models** | 9 | Transformers from scratch (PyTorch) | Mini-GPT with KV cache |
+| | [8](weeks/week08_security-and-guardrails/) | Security: threat models, prompt injection, guardrails, agent permissions, privacy, grounding, red-teaming | Red-team & harden three systems; report + regression suite |
+| **5 · Models** | [9](weeks/week09_transformers-from-scratch/) | Transformers from scratch: PyTorch, BPE, attention, the Qwen2 decoder, training a mini-GPT, MoE, FlashAttention | KV cache + top-p sampling, benchmarked |
 | | 10 | Fine-tuning: SFT, LoRA/QLoRA, DPO, merge & export | Small model beats prompted base |
 | | 11 | Inference & deployment: quantisation, vLLM, FastAPI, Docker | Deploy + load test |
 | **6 · Capstone** | 12 | A production AI product, end to end | Demo + portfolio README |
 
-> **Status:** Weeks 1–7 are written (lessons, solutions, tests); Weeks 8–12 are being added one at a time, each building on the previous weeks' artifacts. Run `./scripts/check.sh` to lint and run every offline test.
+> **Status:** Weeks 1–9 are written (lessons, solutions, tests); Weeks 10–12 are being added one at a time, each building on the previous weeks' artifacts. Run `./scripts/check.sh` to lint and run every offline test.
 
 ## Setup
 

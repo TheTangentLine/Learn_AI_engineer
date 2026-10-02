@@ -9,6 +9,7 @@ dependencies = [
     "python-dotenv>=1.2",
     "pydantic>=2.13",
     "tiktoken>=0.14",
+    "regex>=2024.1",  # the Unicode-aware patterns of the Week 9 BPE tokenizer (tiktoken depends on it too)
     "numpy>=2.5",
     "matplotlib>=3.11",
     "rich>=15.0",
@@ -51,6 +52,13 @@ agents = [
     # Week 7 tracing (versions used while writing: opentelemetry 1.45; already installed as a dependency of the above)
     "opentelemetry-sdk>=1.30",
     "opentelemetry-exporter-otlp-proto-grpc>=1.30",
+]
+# Fine-tuning (Week 10): PEFT is used to VERIFY the from-scratch LoRA (the lessons train with their own code; TRL/Unsloth appear only as labelled, unrun sketches)
+finetune = [
+    "torch>=2.14",
+    "transformers>=5.18",
+    "peft>=0.21",
+    "accelerate>=1.15",
 ]
 # DSPy (Week 2 Day 6). Its litellm dependency pins openai<3; pip warns but it coexists - or use a separate venv.
 dspy = ["dspy>=3.4"]

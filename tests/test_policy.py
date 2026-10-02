@@ -360,6 +360,18 @@ def test_confirmation_fails_closed_without_a_confirmer_and_shows_the_real_argume
     )
 
 
+def test_a_confirmer_that_crashes_is_not_an_approval():
+    def broken(call):
+        raise TimeoutError("the approval service is down")
+
+    n = len(CALLS)
+    e = engine(P.ToolRule("create_note", mode="confirm"), confirmer=broken)
+    res = e.guard(REG).execute(call("create_note", name="n", content="x"))
+    assert res.is_error and "could not be obtained" in res.content
+    assert len(CALLS) == n, "the tool must not run"
+    assert e.audit[-1].action == "confirm-denied"
+
+
 def test_argument_rules_run_before_the_human_is_asked():
     asked = []
     e = engine(
